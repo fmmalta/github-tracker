@@ -12,9 +12,9 @@ export function SyncStatusBadge({ health, loading }: SyncStatusBadgeProps) {
     return <Chip icon={<Sync />} label="Checking..." size="small" variant="outlined" color="default" />
   }
 
-  const isSyncing = health.queue.active > 0 || health.queue.pending > 0
-  const lastSync = health.last_sync
-    ? new Date(health.last_sync).toLocaleString()
+  const isSyncing = false // Queue depth placeholder; full BullMQ inspection in Phase 4
+  const lastSync = health.last_sync?.completed_at
+    ? new Date(health.last_sync.completed_at).toLocaleString()
     : 'Never'
 
   if (isSyncing) {

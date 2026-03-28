@@ -101,3 +101,16 @@ export const METRIC_DEFINITIONS: Record<MetricKey, MetricDefinition> = {
     disclaimer: 'Repository-level aggregate.',
   },
 };
+
+export interface HealthStatus {
+  status: 'ok' | 'degraded'
+  queue: {
+    metrics_queue_depth: number
+  }
+  last_sync: {
+    completed_at: string | null
+    type: string | null
+    status: string | null
+  } | null
+  last_metrics_aggregation: string | null
+}

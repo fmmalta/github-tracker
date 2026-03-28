@@ -137,27 +137,38 @@ export class MetricsService {
   }
 
   async getHealth(): Promise<HealthStatus> {
-    const lastSync = await this.syncJobRepo.findOne({
-      where: { status: 'success' },
-      order: { finished_at: 'DESC' },
-    });
+    try {
+      const lastSync = await this.syncJobRepo.findOne({
+        where: { status: 'success' },
+        order: { finished_at: 'DESC' },
+      });
 
-    const lastMetrics = await this.dailyMetricRepo.findOne({
-      order: { created_at: 'DESC' },
-    });
+      const lastMetrics = await this.dailyMetricRepo.findOne({
+        order: { created_at: 'DESC' },
+      });
 
-    return {
-      status: 'ok',
-      queue: {
-        metrics_queue_depth: 0, // BullMQ queue depth — placeholder; full BullMQ inspection in Phase 4
-      },
-      last_sync: {
-        completed_at: lastSync?.finished_at?.toISOString() ?? null,
-        type: lastSync?.type ?? null,
-        status: lastSync?.status ?? null,
-      },
-      last_metrics_aggregation: lastMetrics?.created_at?.toISOString() ?? null,
-    };
+      return {
+        status: 'ok',
+        queue: {
+          metrics_queue_depth: 0, // BullMQ queue depth — placeholder; full BullMQ inspection in Phase 4
+        },
+        last_sync: {
+          completed_at: lastSync?.finished_at?.toISOString() ?? null,
+          type: lastSync?.type ?? null,
+          status: lastSync?.status ?? null,
+        },
+        last_metrics_aggregation: lastMetrics?.created_at?.toISOString() ?? null,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.warn(`Health check error: ${message}`);
+      return {
+        status: 'degraded',
+        queue: { metrics_queue_depth: 0 },
+        last_sync: { completed_at: null, type: null, status: null },
+        last_metrics_aggregation: null,
+      };
+    }
   }
 
   private aggregateRows(rows: DailyMetric[]): AggregatedMetric[] {

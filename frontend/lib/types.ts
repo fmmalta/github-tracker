@@ -43,12 +43,13 @@ export interface TrendDataPoint {
 export interface HealthStatus {
   status: 'ok' | 'degraded'
   queue: {
-    pending: number
-    active: number
-    delayed: number
-    failed: number
+    metrics_queue_depth: number
   }
-  last_sync: string | null
+  last_sync: {
+    completed_at: string | null
+    type: string | null
+    status: string | null
+  } | null
   last_metrics_aggregation: string | null
 }
 

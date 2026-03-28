@@ -12,14 +12,14 @@ import { useAuth } from '@/hooks/useAuth'
 
 const COOLDOWN_SECONDS = 3600 // 1 hour
 
-function isCooldownActive(lastSync: string | null): boolean {
+function isCooldownActive(lastSync: string | null | undefined): boolean {
   if (!lastSync) return false
   const lastSyncMs = new Date(lastSync).getTime()
   const elapsedSeconds = (Date.now() - lastSyncMs) / 1000
   return elapsedSeconds < COOLDOWN_SECONDS
 }
 
-function cooldownRemainingMinutes(lastSync: string | null): number {
+function cooldownRemainingMinutes(lastSync: string | null | undefined): number {
   if (!lastSync) return 0
   const elapsed = (Date.now() - new Date(lastSync).getTime()) / 1000
   return Math.max(0, Math.ceil((COOLDOWN_SECONDS - elapsed) / 60))
@@ -45,9 +45,9 @@ export default function AdminPage() {
     )
   }
 
-  const cooldown = isCooldownActive(health?.last_sync ?? null)
-  const remainingMinutes = cooldownRemainingMinutes(health?.last_sync ?? null)
-  const isSyncing = (health?.queue.active ?? 0) > 0 || (health?.queue.pending ?? 0) > 0
+  const cooldown = isCooldownActive(health?.last_sync?.completed_at)
+  const remainingMinutes = cooldownRemainingMinutes(health?.last_sync?.completed_at)
+  const isSyncing = false // Queue depth placeholder; full BullMQ inspection in Phase 4
 
   const handleSync = () => {
     reset()
@@ -80,18 +80,11 @@ export default function AdminPage() {
             </Typography>
             <Grid container spacing={2}>
               {[
-                { label: 'Active', value: health?.queue.active ?? 0 },
-                { label: 'Pending', value: health?.queue.pending ?? 0 },
-                { label: 'Delayed', value: health?.queue.delayed ?? 0 },
-                { label: 'Failed', value: health?.queue.failed ?? 0 },
+                { label: 'Queue Depth', value: health?.queue.metrics_queue_depth ?? 0 },
               ].map(({ label, value }) => (
                 <Grid size={{ xs: 6, sm: 3 }} key={label}>
                   <Typography variant="caption" color="text.secondary">{label}</Typography>
-                  <Typography
-                    variant="h5"
-                    fontWeight={700}
-                    color={label === 'Failed' && value > 0 ? 'error.main' : 'text.primary'}
-                  >
+                  <Typography variant="h5" fontWeight={700} color="text.primary">
                     {value}
                   </Typography>
                 </Grid>
@@ -101,8 +94,8 @@ export default function AdminPage() {
             <Divider sx={{ my: 2 }} />
 
             <Typography variant="body2" color="text.secondary">
-              Last sync: {health?.last_sync
-                ? new Date(health.last_sync).toLocaleString()
+              Last sync: {health?.last_sync?.completed_at
+                ? new Date(health.last_sync.completed_at).toLocaleString()
                 : 'Never'}
             </Typography>
             <Typography variant="body2" color="text.secondary">
