@@ -125,6 +125,22 @@ export class DataController {
     return this.dataService.getPullRequests(orgId, query);
   }
 
+  @Get('developer-reviews/:developerId')
+  @ApiOperation({ summary: 'PRs reviewed by a specific developer' })
+  @ApiParam({ name: 'developerId', description: 'Developer UUID' })
+  @ApiQuery({ name: 'org_id', type: String, required: false })
+  @ApiQuery({ name: 'limit', type: Number, required: false })
+  @ApiQuery({ name: 'offset', type: Number, required: false })
+  @ApiResponse({ status: 200, description: 'Developer review history' })
+  async getDeveloperReviews(
+    @Param('developerId') developerId: string,
+    @Query() query: { org_id?: string; limit?: number; offset?: number },
+    @CurrentUser() _user: AuthenticatedUser,
+  ) {
+    const orgId = query.org_id ?? '';
+    return this.dataService.getDeveloperReviews(developerId, orgId, query);
+  }
+
   @Get('admin/sync-history')
   @Roles('admin')
   @ApiOperation({ summary: 'Paginated sync job history (newest first)' })

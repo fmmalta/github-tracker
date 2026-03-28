@@ -7,10 +7,21 @@ import { PullRequest } from '../github/entities/pull-request.entity';
 import { Organization } from '../github/entities/organization.entity';
 import { SyncJob } from '../github/entities/sync-job.entity';
 import { WebhookDelivery } from '../github/entities/webhook-delivery.entity';
+import { Review } from '../github/entities/review.entity';
 import { RepoQueryDto } from './dto/repo-query.dto';
 import { DeveloperQueryDto } from './dto/developer-query.dto';
 import { PrQueryDto } from './dto/pr-query.dto';
 import { AdminQueryDto } from './dto/admin-query.dto';
+
+export interface DeveloperReviewDto {
+  id: string;
+  pr_title: string;
+  pr_number: number;
+  pr_html_url: string | null;
+  repo_name: string;
+  state: 'approved' | 'changes_requested' | 'commented' | 'dismissed';
+  date_reviewed: string;
+}
 
 export interface PaginatedResponse<T> {
   data: T[];
@@ -36,6 +47,8 @@ export class DataService {
     private readonly syncJobRepo: TypeOrmRepository<SyncJob>,
     @InjectRepository(WebhookDelivery)
     private readonly webhookDeliveryRepo: TypeOrmRepository<WebhookDelivery>,
+    @InjectRepository(Review)
+    private readonly reviewRepo: TypeOrmRepository<Review>,
   ) {}
 
   async getOrgs(): Promise<{ id: string; login: string; name: string | null }[]> {
@@ -163,5 +176,42 @@ export class DataService {
     // Re-queue is handled by the webhook processor watching 'queued' status.
     // For now, marking as 'queued' surfaces it for the next processing cycle.
     return { ok: true };
+  }
+
+  async getDeveloperReviews(
+    developerId: string,
+    orgId: string,
+    query: { limit?: number; offset?: number },
+  ): Promise<{ data: DeveloperReviewDto[]; total: number }> {
+    const limit = query.limit ?? 50;
+    const offset = query.offset ?? 0;
+
+    const [reviews, total] = await this.reviewRepo.findAndCount({
+      where: { reviewer_id: developerId, org_id: orgId },
+      relations: ['pull_request', 'pull_request.repository'],
+      order: { submitted_at_github: 'DESC' },
+      take: limit,
+      skip: offset,
+    });
+
+    const data: DeveloperReviewDto[] = reviews.map((r) => {
+      const pr = r.pull_request;
+      const repo = pr?.repository;
+      const prHtmlUrl = repo?.full_name && pr?.number
+        ? `https://github.com/${repo.full_name}/pull/${pr.number}`
+        : null;
+
+      return {
+        id: r.id,
+        pr_title: pr?.title ?? '(unknown)',
+        pr_number: pr?.number ?? 0,
+        pr_html_url: prHtmlUrl,
+        repo_name: repo?.name ?? '(unknown)',
+        state: r.state.toLowerCase() as 'approved' | 'changes_requested' | 'commented' | 'dismissed',
+        date_reviewed: r.submitted_at_github.toISOString(),
+      };
+    });
+
+    return { data, total };
   }
 }
