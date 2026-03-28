@@ -26,7 +26,7 @@ function cooldownRemainingMinutes(lastSync: string | null): number {
 }
 
 export default function AdminPage() {
-  const { user, isAdmin } = useAuth()
+  const { isAdmin } = useAuth()
   const { data: health, isLoading: healthLoading } = useHealth()
   const { mutate: triggerSync, isPending, isSuccess, isError, error, reset } = useAdminSync()
   const [hasTriggered, setHasTriggered] = useState(false)

@@ -40,5 +40,6 @@ EXPOSE 3001
 # Use dumb-init to handle signals properly
 ENTRYPOINT ["dumb-init", "--"]
 
-# Start the app
+# Start the app on port 3001
+ENV PORT=3001
 CMD ["npm", "start"]

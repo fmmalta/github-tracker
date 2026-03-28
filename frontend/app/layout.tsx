@@ -1,5 +1,5 @@
 'use client'
-import { ReactNode } from 'react'
+import { ReactNode, Suspense } from 'react'
 import { ThemeProvider, createTheme, CssBaseline } from '@mui/material'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { NuqsAdapter } from 'nuqs/adapters/next/app'
@@ -19,14 +19,16 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
       <body>
-        <NuqsAdapter>
-          <QueryClientProvider client={queryClient}>
-            <ThemeProvider theme={theme}>
-              <CssBaseline />
-              {children}
-            </ThemeProvider>
-          </QueryClientProvider>
-        </NuqsAdapter>
+        <Suspense>
+          <NuqsAdapter>
+            <QueryClientProvider client={queryClient}>
+              <ThemeProvider theme={theme}>
+                <CssBaseline />
+                {children}
+              </ThemeProvider>
+            </QueryClientProvider>
+          </NuqsAdapter>
+        </Suspense>
       </body>
     </html>
   )
