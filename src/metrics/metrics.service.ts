@@ -1,11 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository, InjectDataSource } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
 import { DailyMetric, MetricKey } from './entities/daily-metric.entity';
 import { DailyMetricsRepository } from './repositories/daily-metrics.repository';
 import { SyncJob } from '../github/entities/sync-job.entity';
 import { MetricsQueryDto } from './dto/metrics-query.dto';
 import { METRIC_DEFINITIONS } from './dto/metrics-response.dto';
+import { METRICS_QUEUE } from './processors/nightly-aggregation.processor';
 
 export interface AggregatedMetric {
   metric_key: MetricKey;
@@ -23,13 +26,17 @@ export interface LeaderboardEntry {
 export interface HealthStatus {
   status: 'ok' | 'degraded';
   queue: {
-    metrics_queue_depth: number;
+    pending: number;
+    active: number;
+    delayed: number;
+    failed: number;
+    oldest_pending_age_seconds: number | null;
   };
   last_sync: {
     completed_at: string | null;
     type: string | null;
     status: string | null;
-  };
+  } | null;
   last_metrics_aggregation: string | null;
 }
 
@@ -45,7 +52,14 @@ export class MetricsService {
     private readonly dailyMetricRepo: Repository<DailyMetric>,
     @InjectDataSource()
     private readonly dataSource: DataSource,
+    @InjectQueue(METRICS_QUEUE) private readonly metricsQueue: Queue,
   ) {}
+
+  private normalizeMetricKey(key: string | undefined): MetricKey | undefined {
+    if (!key) return undefined;
+    const lower = key.toLowerCase() as MetricKey;
+    return Object.values(MetricKey).includes(lower) ? lower : undefined;
+  }
 
   async getOrgMetrics(orgId: string, query: MetricsQueryDto): Promise<{ data: AggregatedMetric[]; definitions: typeof METRIC_DEFINITIONS }> {
     const rows = await this.dailyMetricsRepository.findByDateRange({
@@ -53,7 +67,7 @@ export class MetricsService {
       endDate: query.end_date,
       orgId,
       branch: query.branch,
-      metricKeys: query.metric_key ? [query.metric_key] : undefined,
+      metricKeys: this.normalizeMetricKey(query.metric_key) ? [this.normalizeMetricKey(query.metric_key)!] : undefined,
     });
 
     const data = this.aggregateRows(rows);
@@ -67,7 +81,7 @@ export class MetricsService {
       orgId,
       repoId,
       branch: query.branch,
-      metricKeys: query.metric_key ? [query.metric_key] : undefined,
+      metricKeys: this.normalizeMetricKey(query.metric_key) ? [this.normalizeMetricKey(query.metric_key)!] : undefined,
     });
 
     const data = this.aggregateRows(rows);
@@ -82,7 +96,7 @@ export class MetricsService {
       developerId,
       repoId: query.repo_id,
       branch: query.branch,
-      metricKeys: query.metric_key ? [query.metric_key] : undefined,
+      metricKeys: this.normalizeMetricKey(query.metric_key) ? [this.normalizeMetricKey(query.metric_key)!] : undefined,
     });
 
     const data = this.aggregateRows(rows);
@@ -91,19 +105,24 @@ export class MetricsService {
 
   async getLeaderboard(orgId: string, query: MetricsQueryDto): Promise<{ data: LeaderboardEntry[]; total: number; limit: number; offset: number }> {
     // Rank developers by specified metric_key (default: PRS_MERGED)
-    const targetKey = query.metric_key ?? MetricKey.PRS_MERGED;
+    // Normalize to lowercase to handle both 'PRS_MERGED_TOTAL' and 'prs_merged_total'
+    const rawKey = (query.metric_key ?? MetricKey.PRS_MERGED).toLowerCase();
+    const targetKey = Object.values(MetricKey).includes(rawKey as MetricKey)
+      ? rawKey as MetricKey
+      : MetricKey.PRS_MERGED;
     const limit = query.limit ?? 50;
     const offset = query.offset ?? 0;
 
-    const results: Array<{ developer_id: string; total: string }> = await this.dataSource.query(`
-      SELECT developer_id, SUM(metric_value) as total
-      FROM daily_metrics
-      WHERE org_id = $1
-        AND metric_date >= $2 AND metric_date <= $3
-        AND metric_key = $4
-        AND developer_id IS NOT NULL
-        ${query.repo_id ? 'AND repo_id = $6' : ''}
-      GROUP BY developer_id
+    const results: Array<{ developer_id: string; login: string; name: string | null; total: string }> = await this.dataSource.query(`
+      SELECT dm.developer_id, d.login, d.name, SUM(dm.metric_value) as total
+      FROM daily_metrics dm
+      JOIN developers d ON d.id = dm.developer_id
+      WHERE dm.org_id = $1
+        AND dm.metric_date >= $2 AND dm.metric_date <= $3
+        AND dm.metric_key = $4
+        AND dm.developer_id IS NOT NULL
+        ${query.repo_id ? 'AND dm.repo_id = $6' : ''}
+      GROUP BY dm.developer_id, d.login, d.name
       ORDER BY total ${query.sort_dir ?? 'DESC'}
       LIMIT $5
     `, query.repo_id
@@ -114,6 +133,8 @@ export class MetricsService {
     const paginated = results.slice(offset, offset + limit);
     const data: LeaderboardEntry[] = paginated.map((r, i) => ({
       developer_id: r.developer_id,
+      developer_login: r.login,
+      developer_name: r.name ?? null,
       metric_key: targetKey,
       total: Number(r.total),
       rank: offset + i + 1,
@@ -138,6 +159,19 @@ export class MetricsService {
 
   async getHealth(): Promise<HealthStatus> {
     try {
+      const [pending, active, delayed, failed, delayedJobs] = await Promise.all([
+        this.metricsQueue.getWaitingCount(),
+        this.metricsQueue.getActiveCount(),
+        this.metricsQueue.getDelayedCount(),
+        this.metricsQueue.getFailedCount(),
+        this.metricsQueue.getDelayed(0, 0), // oldest delayed job only
+      ]);
+
+      const oldestJob = delayedJobs[0];
+      const oldestPendingAgeSeconds = oldestJob?.timestamp
+        ? Math.floor((Date.now() - oldestJob.timestamp) / 1000)
+        : null;
+
       const lastSync = await this.syncJobRepo.findOne({
         where: { status: 'success' },
         order: { finished_at: 'DESC' },
@@ -148,10 +182,8 @@ export class MetricsService {
       });
 
       return {
-        status: 'ok',
-        queue: {
-          metrics_queue_depth: 0, // BullMQ queue depth — placeholder; full BullMQ inspection in Phase 4
-        },
+        status: failed > 0 ? 'degraded' : 'ok',
+        queue: { pending, active, delayed, failed, oldest_pending_age_seconds: oldestPendingAgeSeconds },
         last_sync: {
           completed_at: lastSync?.finished_at?.toISOString() ?? null,
           type: lastSync?.type ?? null,
@@ -164,7 +196,7 @@ export class MetricsService {
       this.logger.warn(`Health check error: ${message}`);
       return {
         status: 'degraded',
-        queue: { metrics_queue_depth: 0 },
+        queue: { pending: 0, active: 0, delayed: 0, failed: 0, oldest_pending_age_seconds: null },
         last_sync: { completed_at: null, type: null, status: null },
         last_metrics_aggregation: null,
       };
