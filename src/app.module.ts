@@ -7,6 +7,7 @@ import { RedisModule } from './redis/redis.module';
 import { QueueModule } from './queue/queue.module';
 import { AuthModule } from './auth/auth.module';
 import { MetricsModule } from './metrics/metrics.module';
+import { DataModule } from './data/data.module';
 import { JwtGuard } from './auth/guards/jwt.guard';
 import { RolesGuard } from './auth/guards/roles.guard';
 import { AuditMiddleware } from './common/middleware/audit.middleware';
@@ -21,6 +22,7 @@ import { InactivityMiddleware } from './common/middleware/inactivity.middleware'
     GithubModule,
     AuthModule,
     MetricsModule,
+    DataModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtGuard },   // Global JWT guard — @Public() routes bypass it
