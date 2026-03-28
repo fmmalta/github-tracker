@@ -1,8 +1,9 @@
 'use client'
 import { Box, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Typography, Divider } from '@mui/material'
-import { Dashboard, FolderOpen, Leaderboard, Source } from '@mui/icons-material'
+import { Dashboard, FolderOpen, Leaderboard, Source, Settings } from '@mui/icons-material'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { useAuth } from '@/hooks/useAuth'
 
 const NAV_ITEMS = [
   { label: 'Org Overview', href: '/dashboard', icon: <Dashboard /> },
@@ -13,6 +14,7 @@ const NAV_ITEMS = [
 
 export function Sidebar() {
   const pathname = usePathname()
+  const { isAdmin } = useAuth()
 
   return (
     <Box
@@ -61,6 +63,28 @@ export function Sidebar() {
             </ListItem>
           )
         })}
+        {isAdmin && (
+          <>
+            <Divider sx={{ my: 1 }} />
+            <ListItem disablePadding>
+              <ListItemButton
+                component={Link}
+                href="/admin"
+                selected={pathname === '/admin'}
+                sx={{
+                  mx: 1,
+                  borderRadius: 1,
+                  '&.Mui-selected': { bgcolor: 'primary.light', color: 'primary.dark' },
+                }}
+              >
+                <ListItemIcon sx={{ minWidth: 36, color: pathname === '/admin' ? 'primary.main' : 'inherit' }}>
+                  <Settings />
+                </ListItemIcon>
+                <ListItemText primary="Admin" primaryTypographyProps={{ fontSize: 14 }} />
+              </ListItemButton>
+            </ListItem>
+          </>
+        )}
       </List>
     </Box>
   )
