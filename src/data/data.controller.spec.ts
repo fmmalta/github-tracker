@@ -18,6 +18,7 @@ describe('DataController - Admin Endpoints', () => {
     getRepos: jest.fn(),
     getDevelopers: jest.fn(),
     getPullRequests: jest.fn(),
+    getDeveloperReviews: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -79,5 +80,94 @@ describe('DataController - Admin Endpoints', () => {
     expect(typeof controller.getSyncHistory).toBe('function');
     expect(typeof controller.getWebhookDlq).toBe('function');
     expect(typeof controller.retryWebhookDelivery).toBe('function');
+  });
+});
+
+describe('DataController - Developer Reviews Endpoint', () => {
+  let controller: DataController;
+
+  const mockDataService = {
+    getSyncHistory: jest.fn(),
+    getWebhookDlq: jest.fn(),
+    retryWebhookDelivery: jest.fn(),
+    getOrgs: jest.fn(),
+    getRepos: jest.fn(),
+    getDevelopers: jest.fn(),
+    getPullRequests: jest.fn(),
+    getDeveloperReviews: jest.fn(),
+  };
+
+  beforeEach(async () => {
+    jest.clearAllMocks();
+
+    const module: TestingModule = await Test.createTestingModule({
+      controllers: [DataController],
+      providers: [
+        { provide: DataService, useValue: mockDataService },
+        Reflector,
+      ],
+    })
+      .overrideGuard(OrgScopingGuard)
+      .useValue(mockOrgScopingGuard)
+      .compile();
+
+    controller = module.get<DataController>(DataController);
+  });
+
+  it('Test 1: getDeveloperReviews returns reviews with pr_title, pr_number, repo_name, state, date_reviewed', async () => {
+    const mockReview = {
+      id: 'rev-uuid',
+      pr_title: 'Fix auth bug',
+      pr_number: 42,
+      pr_html_url: 'https://github.com/my-org/my-repo/pull/42',
+      repo_name: 'my-repo',
+      state: 'approved',
+      date_reviewed: '2026-03-28T10:00:00.000Z',
+    };
+    mockDataService.getDeveloperReviews.mockResolvedValue({ data: [mockReview], total: 1 });
+
+    const result = await (controller as any).getDeveloperReviews(
+      'dev-uuid',
+      { org_id: 'org-uuid', limit: 50, offset: 0 },
+      {},
+    );
+
+    expect(mockDataService.getDeveloperReviews).toHaveBeenCalledWith('dev-uuid', 'org-uuid', expect.any(Object));
+    expect(result.data[0]).toMatchObject({
+      pr_title: 'Fix auth bug',
+      pr_number: 42,
+      repo_name: 'my-repo',
+      state: 'approved',
+      date_reviewed: expect.any(String),
+    });
+  });
+
+  it('Test 2: getDeveloperReviews is scoped to org_id from query', async () => {
+    mockDataService.getDeveloperReviews.mockResolvedValue({ data: [], total: 0 });
+
+    await (controller as any).getDeveloperReviews(
+      'dev-uuid',
+      { org_id: 'specific-org-id' },
+      {},
+    );
+
+    const [, orgIdArg] = mockDataService.getDeveloperReviews.mock.calls[0];
+    expect(orgIdArg).toBe('specific-org-id');
+  });
+
+  it('Test 3: getDeveloperReviews returns 200 for authenticated user with valid role', async () => {
+    mockDataService.getDeveloperReviews.mockResolvedValue({ data: [], total: 0 });
+
+    const result = await (controller as any).getDeveloperReviews(
+      'dev-uuid',
+      { org_id: 'org-uuid' },
+      { id: 'user-uuid', role: 'viewer' },
+    );
+
+    expect(result).toEqual({ data: [], total: 0 });
+  });
+
+  it('Test 4: getDeveloperReviews method exists on controller', () => {
+    expect(typeof (controller as any).getDeveloperReviews).toBe('function');
   });
 });
