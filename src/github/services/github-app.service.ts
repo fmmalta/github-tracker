@@ -6,25 +6,44 @@ import { RedisService } from '../../redis/redis.service';
 @Injectable()
 export class GitHubAppService {
   private readonly logger = new Logger(GitHubAppService.name);
-  private app: App;
+  private app: App | null = null;
+  private usePatAuth: boolean;
 
   constructor(
     private readonly redisService: RedisService,
     private readonly configService: ConfigService,
   ) {
-    this.app = new App({
-      appId: this.configService.get<string>('GITHUB_APP_ID', ''),
-      privateKey: this.configService.get<string>('GITHUB_PRIVATE_KEY', ''),
-    });
+    const appId = this.configService.get<string>('GITHUB_APP_ID', '').trim();
+    const privateKey = this.configService.get<string>('GITHUB_PRIVATE_KEY', '').trim();
+    const pat = this.configService.get<string>('GITHUB_PAT', '').trim();
+
+    // Use PAT if available, otherwise fall back to GitHub App
+    this.usePatAuth = !!pat && pat !== 'placeholder';
+
+    if (!this.usePatAuth && appId && appId !== 'placeholder' && privateKey && privateKey !== 'placeholder') {
+      this.app = new App({
+        appId,
+        privateKey,
+      });
+    }
   }
 
   async getInstallationToken(installationId: number): Promise<string> {
+    if (this.usePatAuth) {
+      const pat = this.configService.get<string>('GITHUB_PAT', '');
+      return pat;
+    }
+
     const cacheKey = `github-token:${installationId}`;
 
     const cached = await this.redisService.get(cacheKey);
     if (cached) {
       const parsed = JSON.parse(cached) as { token: string };
       return parsed.token;
+    }
+
+    if (!this.app) {
+      throw new Error('GitHub App not configured and no PAT provided');
     }
 
     const token = await this.fetchInstallationToken(installationId);
@@ -39,6 +58,9 @@ export class GitHubAppService {
   }
 
   private async fetchInstallationToken(installationId: number): Promise<string> {
+    if (!this.app) {
+      throw new Error('GitHub App not configured');
+    }
     const octokit = await this.app.getInstallationOctokit(installationId);
     const auth = (await octokit.auth({ type: 'installation' })) as { token: string };
     return auth.token;
