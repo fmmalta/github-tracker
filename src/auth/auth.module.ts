@@ -62,6 +62,7 @@ import { OrgScopingGuard } from './guards/org-scoping.guard';
     AuditLogRepository,
     JwtModule,
     PassportModule,
+    TypeOrmModule,
   ],
 })
 export class AuthModule {}
