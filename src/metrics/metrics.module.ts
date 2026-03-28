@@ -5,7 +5,10 @@ import { DailyMetric } from './entities/daily-metric.entity';
 import { SyncJob } from '../github/entities/sync-job.entity';
 import { DailyMetricsRepository } from './repositories/daily-metrics.repository';
 import { AggregationService } from './aggregation.service';
+import { MetricsService } from './metrics.service';
+import { MetricsController } from './metrics.controller';
 import { NightlyAggregationProcessor, METRICS_QUEUE } from './processors/nightly-aggregation.processor';
+import { AuthModule } from '../auth/auth.module';
 
 @Module({
   imports: [
@@ -19,14 +22,18 @@ import { NightlyAggregationProcessor, METRICS_QUEUE } from './processors/nightly
         removeOnFail: false, // Keep failed jobs for investigation
       },
     }),
+    AuthModule,  // Provides JwtGuard, RolesGuard, OrgScopingGuard, decorators
   ],
+  controllers: [MetricsController],
   providers: [
     DailyMetricsRepository,
     AggregationService,
+    MetricsService,
     NightlyAggregationProcessor,
   ],
   exports: [
     AggregationService,
+    MetricsService,
     DailyMetricsRepository,
     BullModule,
   ],
