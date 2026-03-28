@@ -1,0 +1,39 @@
+{
+  "name": "github-tracker-frontend",
+  "version": "1.0.0",
+  "description": "GitHub Engineering Analytics Dashboard",
+  "scripts": {
+    "dev": "next dev -p 3001",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
+    "@mui/icons-material": "^7.3.9",
+    "@mui/material": "^7.3.9",
+    "@mui/x-data-grid": "^8.28.1",
+    "@mui/x-date-pickers": "^8.27.2",
+    "@tanstack/react-query": "^5.95.2",
+    "dayjs": "^1.11.20",
+    "next": "^15.5.14",
+    "nuqs": "^2.8.9",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "react-hook-form": "^7.72.0",
+    "recharts": "^3.8.1",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.0",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@testing-library/react": "^14.0.0",
+    "@testing-library/jest-dom": "^6.0.0",
+    "vitest": "^1.0.0",
+    "@playwright/test": "^1.40.0",
+    "typescript": "^6.0.2"
+  }
+}
