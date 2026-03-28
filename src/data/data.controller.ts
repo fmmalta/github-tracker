@@ -1,11 +1,12 @@
 import {
-  Controller, Get, Param, Query, UseGuards, NotFoundException,
+  Controller, Get, Post, Param, Query, UseGuards, NotFoundException, HttpCode,
 } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiParam, ApiQuery, ApiResponse } from '@nestjs/swagger';
 import { DataService } from './data.service';
 import { RepoQueryDto } from './dto/repo-query.dto';
 import { DeveloperQueryDto } from './dto/developer-query.dto';
 import { PrQueryDto } from './dto/pr-query.dto';
+import { AdminQueryDto } from './dto/admin-query.dto';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { OrgScopingGuard } from '../auth/guards/org-scoping.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -18,6 +19,13 @@ import { AuthenticatedUser } from '../auth/strategies/jwt.strategy';
 @UseGuards(OrgScopingGuard)
 export class DataController {
   constructor(private readonly dataService: DataService) {}
+
+  @Get('orgs')
+  @ApiOperation({ summary: 'List all active organizations' })
+  @ApiResponse({ status: 200, description: 'List of organizations' })
+  async getOrgs() {
+    return this.dataService.getOrgs();
+  }
 
   @Get('orgs/:orgId/repos')
   @ApiOperation({ summary: 'List repositories for organization' })
@@ -115,5 +123,39 @@ export class DataController {
   ) {
     const orgId = query.org_id ?? '';
     return this.dataService.getPullRequests(orgId, query);
+  }
+
+  @Get('admin/sync-history')
+  @Roles('admin')
+  @ApiOperation({ summary: 'Paginated sync job history (newest first)' })
+  @ApiQuery({ name: 'limit', type: Number, required: false })
+  @ApiQuery({ name: 'offset', type: Number, required: false })
+  @ApiResponse({ status: 200, description: 'Sync history' })
+  @ApiResponse({ status: 403, description: 'Admin role required' })
+  async getSyncHistory(@Query() query: AdminQueryDto) {
+    return this.dataService.getSyncHistory(query);
+  }
+
+  @Get('admin/webhook-dlq')
+  @Roles('admin')
+  @ApiOperation({ summary: 'Failed webhook deliveries (dead-letter queue)' })
+  @ApiQuery({ name: 'limit', type: Number, required: false })
+  @ApiQuery({ name: 'offset', type: Number, required: false })
+  @ApiResponse({ status: 200, description: 'Failed webhook deliveries' })
+  @ApiResponse({ status: 403, description: 'Admin role required' })
+  async getWebhookDlq(@Query() query: AdminQueryDto) {
+    return this.dataService.getWebhookDlq(query);
+  }
+
+  @Post('admin/webhook-dlq/:id/retry')
+  @Roles('admin')
+  @HttpCode(201)
+  @ApiOperation({ summary: 'Retry a failed webhook delivery' })
+  @ApiParam({ name: 'id', description: 'WebhookDelivery UUID' })
+  @ApiResponse({ status: 201, description: 'Retry queued' })
+  @ApiResponse({ status: 403, description: 'Admin role required' })
+  @ApiResponse({ status: 404, description: 'Delivery not found' })
+  async retryWebhookDelivery(@Param('id') id: string) {
+    return this.dataService.retryWebhookDelivery(id);
   }
 }

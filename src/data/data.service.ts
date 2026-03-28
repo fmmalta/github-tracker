@@ -4,9 +4,13 @@ import { Repository as TypeOrmRepository } from 'typeorm';
 import { Repository } from '../github/entities/repository.entity';
 import { Developer } from '../github/entities/developer.entity';
 import { PullRequest } from '../github/entities/pull-request.entity';
+import { Organization } from '../github/entities/organization.entity';
+import { SyncJob } from '../github/entities/sync-job.entity';
+import { WebhookDelivery } from '../github/entities/webhook-delivery.entity';
 import { RepoQueryDto } from './dto/repo-query.dto';
 import { DeveloperQueryDto } from './dto/developer-query.dto';
 import { PrQueryDto } from './dto/pr-query.dto';
+import { AdminQueryDto } from './dto/admin-query.dto';
 
 export interface PaginatedResponse<T> {
   data: T[];
@@ -26,7 +30,18 @@ export class DataService {
     private readonly developerRepo: TypeOrmRepository<Developer>,
     @InjectRepository(PullRequest)
     private readonly prRepo: TypeOrmRepository<PullRequest>,
+    @InjectRepository(Organization)
+    private readonly orgRepo: TypeOrmRepository<Organization>,
+    @InjectRepository(SyncJob)
+    private readonly syncJobRepo: TypeOrmRepository<SyncJob>,
+    @InjectRepository(WebhookDelivery)
+    private readonly webhookDeliveryRepo: TypeOrmRepository<WebhookDelivery>,
   ) {}
+
+  async getOrgs(): Promise<{ id: string; login: string; name: string | null }[]> {
+    const orgs = await this.orgRepo.find({ where: { is_active: true }, order: { login: 'ASC' } });
+    return orgs.map(o => ({ id: o.id, login: o.login, name: o.name }));
+  }
 
   async getRepos(orgId: string, query: RepoQueryDto): Promise<PaginatedResponse<Repository>> {
     const qb = this.repoRepo.createQueryBuilder('repo')
@@ -117,5 +132,36 @@ export class DataService {
       .getMany();
 
     return { data, total, limit: query.limit ?? 50, offset: query.offset ?? 0 };
+  }
+
+  async getSyncHistory(query: AdminQueryDto): Promise<{ data: SyncJob[]; total: number }> {
+    const limit = query.limit ?? 50;
+    const offset = query.offset ?? 0;
+    const [data, total] = await this.syncJobRepo.findAndCount({
+      order: { created_at: 'DESC' },
+      take: limit,
+      skip: offset,
+    });
+    return { data, total };
+  }
+
+  async getWebhookDlq(query: AdminQueryDto): Promise<{ data: WebhookDelivery[]; total: number }> {
+    const limit = query.limit ?? 50;
+    const offset = query.offset ?? 0;
+    const [data, total] = await this.webhookDeliveryRepo.findAndCount({
+      where: { status: 'failed' },
+      order: { received_at: 'DESC' },
+      take: limit,
+      skip: offset,
+    });
+    return { data, total };
+  }
+
+  async retryWebhookDelivery(id: string): Promise<{ ok: boolean }> {
+    const delivery = await this.webhookDeliveryRepo.findOneOrFail({ where: { id } });
+    await this.webhookDeliveryRepo.update(id, { status: 'queued', retry_count: delivery.retry_count + 1 });
+    // Re-queue is handled by the webhook processor watching 'queued' status.
+    // For now, marking as 'queued' surfaces it for the next processing cycle.
+    return { ok: true };
   }
 }
