@@ -10,6 +10,10 @@ const config: Config = {
   collectCoverageFrom: ['**/*.(t|j)s'],
   coverageDirectory: '../coverage',
   testEnvironment: 'node',
+  // Map ESM-only @octokit packages to manual CJS mocks in src/__mocks__
+  moduleNameMapper: {
+    '^@octokit/app$': '<rootDir>/__mocks__/@octokit/app.ts',
+  },
 };
 
 export default config;
