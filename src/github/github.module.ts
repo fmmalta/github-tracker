@@ -13,6 +13,7 @@ import { GitHubAppService } from './services/github-app.service';
 import { RateLimitService } from './services/rate-limit.service';
 import { WebhookService } from './services/webhook.service';
 import { WebhookController } from './controllers/webhook.controller';
+import { WebhookProcessor } from './processors/webhook.processor';
 import { WEBHOOK_QUEUE } from '../queue/queue.service';
 
 @Module({
@@ -24,7 +25,7 @@ import { WEBHOOK_QUEUE } from '../queue/queue.service';
     BullModule.registerQueue({ name: WEBHOOK_QUEUE }),
   ],
   controllers: [WebhookController],
-  providers: [GitHubAppService, RateLimitService, WebhookService],
+  providers: [GitHubAppService, RateLimitService, WebhookService, WebhookProcessor],
   exports: [TypeOrmModule, GitHubAppService, RateLimitService, WebhookService],
 })
 export class GithubModule {}
