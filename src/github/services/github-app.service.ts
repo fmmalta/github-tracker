@@ -1,12 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { App } from '@octokit/app';
 import { RedisService } from '../../redis/redis.service';
 
 @Injectable()
 export class GitHubAppService {
   private readonly logger = new Logger(GitHubAppService.name);
-  private app: App | null = null;
+  private app: any = null;
   private usePatAuth: boolean;
 
   constructor(
@@ -21,6 +20,8 @@ export class GitHubAppService {
     this.usePatAuth = !!pat && pat !== 'placeholder';
 
     if (!this.usePatAuth && appId && appId !== 'placeholder' && privateKey && privateKey !== 'placeholder') {
+      // Lazy load @octokit/app only if using GitHub App auth
+      const { App } = require('@octokit/app');
       this.app = new App({
         appId,
         privateKey,
