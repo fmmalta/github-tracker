@@ -1,15 +1,18 @@
 // Metric types
 export type MetricKey =
-  | 'PRS_OPENED_TOTAL'
-  | 'PRS_MERGED_TOTAL'
-  | 'PRS_CLOSED_WITHOUT_MERGE_TOTAL'
-  | 'AVG_TIME_TO_FIRST_REVIEW_HOURS'
-  | 'AVG_TIME_TO_MERGE_HOURS'
-  | 'TOTAL_ADDITIONS'
-  | 'TOTAL_DELETIONS'
-  | 'TOTAL_CHANGED_FILES'
-  | 'REVIEWS_SUBMITTED_TOTAL'
-  | 'AVG_PR_SIZE'
+  | 'prs_opened'
+  | 'prs_merged'
+  | 'prs_closed_unmerged'
+  | 'prs_opened_total'
+  | 'prs_merged_total'
+  | 'avg_time_to_first_review_hours'
+  | 'avg_time_to_merge_hours'
+  | 'additions'
+  | 'deletions'
+  | 'changed_files'
+  | 'reviews_submitted'
+  | 'reviews_submitted_total'
+  | 'avg_pr_size'
 
 export interface MetricDefinition {
   key: MetricKey
@@ -43,7 +46,11 @@ export interface TrendDataPoint {
 export interface HealthStatus {
   status: 'ok' | 'degraded'
   queue: {
-    metrics_queue_depth: number
+    pending: number
+    active: number
+    delayed: number
+    failed: number
+    oldest_pending_age_seconds: number | null
   }
   last_sync: {
     completed_at: string | null
@@ -80,10 +87,9 @@ export interface PullRequest {
   number: number
   title: string
   state: PullRequestState
-  developer_id: string
-  developer_login: string
-  repo_id: string
-  repo_full_name: string
+  author_id: string | null
+  author_login: string
+  repository_id: string
   base_branch: string
   additions: number
   deletions: number
@@ -91,7 +97,6 @@ export interface PullRequest {
   github_created_at: string
   github_merged_at: string | null
   github_closed_at: string | null
-  review_count: number
 }
 
 // API response wrappers
@@ -113,6 +118,49 @@ export interface LeaderboardResponse {
 export interface TrendsResponse {
   data: TrendDataPoint[]
   definitions: MetricDefinition[]
+}
+
+// Admin observability types
+export interface SyncJob {
+  id: string
+  type: 'initial_backfill' | 'scheduled' | 'manual'
+  status: 'pending' | 'in_progress' | 'success' | 'failed'
+  org_login: string | null
+  repos_synced: number
+  error_message: string | null
+  retry_count: number
+  started_at: string | null
+  finished_at: string | null
+  created_at: string
+}
+
+export interface WebhookDelivery {
+  id: string
+  delivery_id: string
+  event_type: string
+  action: string | null
+  status: 'received' | 'queued' | 'processing' | 'success' | 'failed' | 'duplicate'
+  payload_json: Record<string, unknown>
+  error_message: string | null
+  retry_count: number
+  received_at: string
+  created_at: string
+}
+
+export interface DeveloperReview {
+  id: string
+  pr_title: string
+  pr_number: number
+  pr_html_url: string | null
+  repo_name: string
+  state: 'approved' | 'changes_requested' | 'commented' | 'dismissed'
+  date_reviewed: string
+}
+
+// Developer weekly trend (PRs per week, 90-day window)
+export interface DeveloperWeeklyTrend {
+  week_start: string    // ISO date string for start of week (YYYY-MM-DD)
+  pr_count: number
 }
 
 // Auth types

@@ -80,7 +80,10 @@ export default function AdminPage() {
             </Typography>
             <Grid container spacing={2}>
               {[
-                { label: 'Queue Depth', value: health?.queue.metrics_queue_depth ?? 0 },
+                { label: 'Pending', value: health?.queue.pending ?? 0 },
+                { label: 'Active', value: health?.queue.active ?? 0 },
+                { label: 'Delayed', value: health?.queue.delayed ?? 0 },
+                { label: 'Failed', value: health?.queue.failed ?? 0 },
               ].map(({ label, value }) => (
                 <Grid size={{ xs: 6, sm: 3 }} key={label}>
                   <Typography variant="caption" color="text.secondary">{label}</Typography>
