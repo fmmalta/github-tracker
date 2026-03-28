@@ -12,9 +12,12 @@ import { SyncJob } from './entities/sync-job.entity';
 import { GitHubAppService } from './services/github-app.service';
 import { RateLimitService } from './services/rate-limit.service';
 import { WebhookService } from './services/webhook.service';
+import { BackfillService } from './services/backfill.service';
 import { WebhookController } from './controllers/webhook.controller';
+import { GithubAppController } from './controllers/github-app.controller';
 import { WebhookProcessor } from './processors/webhook.processor';
-import { WEBHOOK_QUEUE } from '../queue/queue.service';
+import { BackfillProcessor } from './processors/backfill.processor';
+import { WEBHOOK_QUEUE, BACKFILL_QUEUE } from '../queue/queue.service';
 
 @Module({
   imports: [
@@ -22,10 +25,20 @@ import { WEBHOOK_QUEUE } from '../queue/queue.service';
       Organization, Repository, Developer, PullRequest,
       Review, Commit, WebhookDelivery, SyncJob,
     ]),
-    BullModule.registerQueue({ name: WEBHOOK_QUEUE }),
+    BullModule.registerQueue(
+      { name: WEBHOOK_QUEUE },
+      { name: BACKFILL_QUEUE },
+    ),
   ],
-  controllers: [WebhookController],
-  providers: [GitHubAppService, RateLimitService, WebhookService, WebhookProcessor],
-  exports: [TypeOrmModule, GitHubAppService, RateLimitService, WebhookService],
+  controllers: [WebhookController, GithubAppController],
+  providers: [
+    GitHubAppService, RateLimitService,
+    WebhookService, BackfillService,
+    WebhookProcessor, BackfillProcessor,
+  ],
+  exports: [
+    TypeOrmModule, GitHubAppService, RateLimitService,
+    WebhookService, BackfillService,
+  ],
 })
 export class GithubModule {}
