@@ -1,37 +1,33 @@
 'use client'
-import { AppBar, Toolbar, Typography, Box, Button, Chip } from '@mui/material'
-import { Logout } from '@mui/icons-material'
 import { useAuth } from '@/hooks/useAuth'
+import { LogOut } from 'lucide-react'
 
 interface HeaderProps {
   title: string
-  rightSlot?: React.ReactNode  // Allows pages to inject sync status badge
+  rightSlot?: React.ReactNode
 }
 
 export function Header({ title, rightSlot }: HeaderProps) {
   const { user, logout } = useAuth()
 
   return (
-    <AppBar
-      position="fixed"
-      color="default"
-      elevation={0}
-      sx={{ left: 240, width: 'calc(100% - 240px)', borderBottom: '1px solid', borderColor: 'divider', bgcolor: 'white' }}
-    >
-      <Toolbar>
-        <Typography variant="h6" fontWeight="600" sx={{ flex: 1 }}>
-          {title}
-        </Typography>
-        {rightSlot}
-        <Box ml={2} display="flex" alignItems="center" gap={1}>
-          {user && (
-            <Chip label={user.email} size="small" variant="outlined" />
-          )}
-          <Button size="small" startIcon={<Logout />} onClick={logout} color="inherit">
-            Sign out
-          </Button>
-        </Box>
-      </Toolbar>
-    </AppBar>
+    <header className="fixed top-0 left-60 right-0 h-16 bg-card border-b border-border flex items-center px-6 z-10">
+      <h1 className="text-base font-semibold text-foreground flex-1">{title}</h1>
+      {rightSlot}
+      <div className="flex items-center gap-3 ml-4">
+        {user && (
+          <span className="text-xs text-muted-foreground border border-border rounded px-2 py-1">
+            {user.email}
+          </span>
+        )}
+        <button
+          onClick={logout}
+          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <LogOut size={14} />
+          Sign out
+        </button>
+      </div>
+    </header>
   )
 }

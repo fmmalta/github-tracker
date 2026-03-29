@@ -1,15 +1,15 @@
 'use client'
-import { Box, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Typography, Divider } from '@mui/material'
-import { Dashboard, FolderOpen, Leaderboard, Source, Settings } from '@mui/icons-material'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useAuth } from '@/hooks/useAuth'
+import { LayoutDashboard, FolderOpen, Trophy, GitPullRequest, Settings } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 const NAV_ITEMS = [
-  { label: 'Org Overview', href: '/dashboard', icon: <Dashboard /> },
-  { label: 'Repos', href: '/repos', icon: <FolderOpen /> },
-  { label: 'Leaderboard', href: '/leaderboard', icon: <Leaderboard /> },
-  { label: 'PR Explorer', href: '/pull-requests', icon: <Source /> },
+  { label: 'Org Overview', href: '/', icon: LayoutDashboard },
+  { label: 'Repos', href: '/repos', icon: FolderOpen },
+  { label: 'Leaderboard', href: '/leaderboard', icon: Trophy },
+  { label: 'PR Explorer', href: '/pull-requests', icon: GitPullRequest },
 ] as const
 
 export function Sidebar() {
@@ -17,75 +17,52 @@ export function Sidebar() {
   const { isAdmin } = useAuth()
 
   return (
-    <Box
-      component="nav"
-      sx={{
-        width: 240,
-        flexShrink: 0,
-        bgcolor: 'white',
-        borderRight: '1px solid',
-        borderColor: 'divider',
-        display: 'flex',
-        flexDirection: 'column',
-        height: '100vh',
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        zIndex: 100,
-      }}
+    <nav
+      className="w-60 shrink-0 bg-card border-r border-border flex flex-col h-screen fixed top-0 left-0 z-10"
       aria-label="Main navigation"
     >
-      <Box sx={{ p: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
-        <Typography variant="subtitle1" fontWeight="bold" color="primary">
-          GitHub Analytics
-        </Typography>
-      </Box>
-      <List sx={{ flex: 1, pt: 1 }}>
-        {NAV_ITEMS.map(({ label, href, icon }) => {
-          const active = pathname === href || (href !== '/dashboard' && pathname.startsWith(href))
+      <div className="p-4 border-b border-border">
+        <span className="text-sm font-semibold text-primary tracking-tight">GitHub Analytics</span>
+      </div>
+      <ul className="flex-1 pt-2 space-y-0.5 px-2">
+        {NAV_ITEMS.map(({ label, href, icon: Icon }) => {
+          const active = pathname === href || (href !== '/' && pathname.startsWith(href))
           return (
-            <ListItem key={href} disablePadding>
-              <ListItemButton
-                component={Link}
+            <li key={href}>
+              <Link
                 href={href}
-                selected={active}
-                sx={{
-                  mx: 1,
-                  borderRadius: 1,
-                  '&.Mui-selected': { bgcolor: 'primary.light', color: 'primary.dark' },
-                }}
+                className={cn(
+                  'flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors',
+                  active
+                    ? 'bg-primary/10 text-primary font-medium'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+                )}
               >
-                <ListItemIcon sx={{ minWidth: 36, color: active ? 'primary.main' : 'inherit' }}>
-                  {icon}
-                </ListItemIcon>
-                <ListItemText primary={label} primaryTypographyProps={{ fontSize: 14 }} />
-              </ListItemButton>
-            </ListItem>
+                <Icon size={16} />
+                {label}
+              </Link>
+            </li>
           )
         })}
         {isAdmin && (
           <>
-            <Divider sx={{ my: 1 }} />
-            <ListItem disablePadding>
-              <ListItemButton
-                component={Link}
+            <li className="border-t border-border my-1 pt-1">
+              <Link
                 href="/admin"
-                selected={pathname === '/admin'}
-                sx={{
-                  mx: 1,
-                  borderRadius: 1,
-                  '&.Mui-selected': { bgcolor: 'primary.light', color: 'primary.dark' },
-                }}
+                className={cn(
+                  'flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors',
+                  pathname === '/admin'
+                    ? 'bg-primary/10 text-primary font-medium'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+                )}
               >
-                <ListItemIcon sx={{ minWidth: 36, color: pathname === '/admin' ? 'primary.main' : 'inherit' }}>
-                  <Settings />
-                </ListItemIcon>
-                <ListItemText primary="Admin" primaryTypographyProps={{ fontSize: 14 }} />
-              </ListItemButton>
-            </ListItem>
+                <Settings size={16} />
+                Admin
+              </Link>
+            </li>
           </>
         )}
-      </List>
-    </Box>
+      </ul>
+    </nav>
   )
 }
