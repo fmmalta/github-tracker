@@ -1,0 +1,66 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Default (dark) — dark mode is forced, not system-preference */
+    --background: 240 28% 4%;        /* #0a0a0f */
+    --foreground: 214 32% 95%;        /* #f1f5f9 */
+    --card: 240 14% 9%;              /* #13131a */
+    --card-foreground: 214 32% 95%;
+    --popover: 240 16% 12%;          /* #1a1a24 */
+    --popover-foreground: 214 32% 95%;
+    --primary: 239 84% 67%;          /* #6366f1 */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 240 16% 12%;
+    --secondary-foreground: 214 32% 95%;
+    --muted: 240 14% 14%;
+    --muted-foreground: 215 16% 47%; /* #64748b */
+    --accent: 240 16% 12%;
+    --accent-foreground: 214 32% 95%;
+    --destructive: 0 84% 60%;        /* #ef4444 */
+    --destructive-foreground: 0 0% 100%;
+    --success: 142 71% 45%;          /* #22c55e — custom token */
+    --border: 240 7% 12%;            /* rgba(255,255,255,0.07) approximation */
+    --input: 240 14% 14%;
+    --ring: 233 95% 74%;             /* #818cf8 */
+    --radius: 0.5rem;
+  }
+
+  /* Force dark mode — class-based, applied by root layout */
+  .dark {
+    --background: 240 28% 4%;
+    --foreground: 214 32% 95%;
+    --card: 240 14% 9%;
+    --card-foreground: 214 32% 95%;
+    --popover: 240 16% 12%;
+    --popover-foreground: 214 32% 95%;
+    --primary: 239 84% 67%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 240 16% 12%;
+    --secondary-foreground: 214 32% 95%;
+    --muted: 240 14% 14%;
+    --muted-foreground: 215 16% 47%;
+    --accent: 240 16% 12%;
+    --accent-foreground: 214 32% 95%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 240 7% 12%;
+    --input: 240 14% 14%;
+    --ring: 233 95% 74%;
+    --radius: 0.5rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Inter', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
