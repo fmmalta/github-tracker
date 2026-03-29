@@ -2,6 +2,12 @@
 import { useForm } from 'react-hook-form'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
+import { Label } from '@/components/ui/label'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { AlertCircle } from 'lucide-react'
 
 interface LoginForm { email: string; password: string }
 
@@ -34,40 +40,67 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="w-full max-w-sm border border-border rounded-lg bg-card p-8">
-      <h1 className="text-lg font-bold text-foreground mb-6">GitHub Analytics Platform</h1>
-      {apiError && (
-        <div className="border-l-2 border-red-500 bg-red-500/10 text-red-400 p-3 rounded mb-4 text-sm">
-          {apiError}
-        </div>
-      )}
-      <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
-        <div>
-          <label className="block text-xs text-muted-foreground mb-1">Email</label>
-          <input
-            type="email"
-            className="w-full text-sm bg-background border border-border rounded px-3 py-2 text-foreground focus:outline-none focus:border-primary"
-            {...register('email', { required: 'Email required' })}
-          />
-          {errors.email && <p className="text-xs text-red-400 mt-1">{errors.email.message}</p>}
-        </div>
-        <div>
-          <label className="block text-xs text-muted-foreground mb-1">Password</label>
-          <input
-            type="password"
-            className="w-full text-sm bg-background border border-border rounded px-3 py-2 text-foreground focus:outline-none focus:border-primary"
-            {...register('password', { required: 'Password required', minLength: { value: 8, message: 'Min 8 characters' } })}
-          />
-          {errors.password && <p className="text-xs text-red-400 mt-1">{errors.password.message}</p>}
-        </div>
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          className="mt-1 bg-primary hover:bg-primary/90 text-white text-sm font-medium rounded px-4 py-2.5 disabled:opacity-50 transition-colors"
-        >
-          {isSubmitting ? 'Signing in...' : 'Sign in'}
-        </button>
-      </form>
-    </div>
+    <Card className="w-full min-w-[380px] max-w-[440px] border-border bg-card">
+      <CardHeader className="space-y-1 pb-4">
+        <CardTitle className="text-xl font-bold text-foreground tracking-tight">
+          GitHub Analytics
+        </CardTitle>
+        <CardDescription className="text-muted-foreground text-sm">
+          Sign in to your workspace
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {apiError && (
+          <Alert variant="destructive" className="mb-4">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>{apiError}</AlertDescription>
+          </Alert>
+        )}
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="email" className="text-sm text-foreground">
+              Email
+            </Label>
+            <Input
+              id="email"
+              type="email"
+              placeholder="you@company.com"
+              autoComplete="email"
+              aria-invalid={!!errors.email}
+              {...register('email', { required: 'Email required' })}
+            />
+            {errors.email && (
+              <p className="text-xs text-destructive mt-1">{errors.email.message}</p>
+            )}
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="password" className="text-sm text-foreground">
+              Password
+            </Label>
+            <Input
+              id="password"
+              type="password"
+              placeholder="••••••••"
+              autoComplete="current-password"
+              aria-invalid={!!errors.password}
+              {...register('password', {
+                required: 'Password required',
+                minLength: { value: 8, message: 'Min 8 characters' },
+              })}
+            />
+            {errors.password && (
+              <p className="text-xs text-destructive mt-1">{errors.password.message}</p>
+            )}
+          </div>
+          <Button
+            type="submit"
+            disabled={isSubmitting}
+            className="w-full mt-2"
+          >
+            {isSubmitting ? 'Signing in...' : 'Sign in'}
+          </Button>
+        </form>
+      </CardContent>
+    </Card>
   )
 }
