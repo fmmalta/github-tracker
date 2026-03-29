@@ -1,38 +1,34 @@
-import { Card, CardContent, Skeleton, Box, Grid } from '@mui/material'
-
 export function MetricCardSkeleton() {
   return (
-    <Card>
-      <CardContent>
-        <Skeleton variant="text" width="70%" />
-        <Skeleton variant="rectangular" height={48} sx={{ my: 1, borderRadius: 0.5 }} />
-        <Skeleton variant="text" width="40%" />
-      </CardContent>
-    </Card>
+    <div className="rounded-lg border border-border bg-card p-4 animate-pulse">
+      <div className="h-4 bg-muted rounded w-[70%] mb-3" />
+      <div className="h-12 bg-muted rounded w-[50%] mb-3" />
+      <div className="h-3 bg-muted rounded w-[40%]" />
+    </div>
   )
 }
 
 export function MetricGridSkeleton({ count = 4 }: { count?: number }) {
   return (
-    <Box display="grid" gridTemplateColumns="repeat(auto-fill, minmax(250px, 1fr))" gap={2}>
+    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
       {Array.from({ length: count }).map((_, i) => (
         <MetricCardSkeleton key={i} />
       ))}
-    </Box>
+    </div>
   )
 }
 
 export function TableSkeleton({ rows = 5 }: { rows?: number }) {
   return (
-    <Box>
-      <Skeleton variant="rectangular" height={52} sx={{ mb: 1, borderRadius: 0.5 }} />
+    <div className="animate-pulse">
+      <div className="h-13 bg-muted rounded mb-1" />
       {Array.from({ length: rows }).map((_, i) => (
-        <Skeleton key={i} variant="rectangular" height={44} sx={{ mb: 0.5, borderRadius: 0.5 }} />
+        <div key={i} className="h-11 bg-muted/60 rounded mb-0.5" />
       ))}
-    </Box>
+    </div>
   )
 }
 
 export function ChartSkeleton() {
-  return <Skeleton variant="rectangular" height={300} sx={{ borderRadius: 1 }} />
+  return <div className="animate-pulse bg-muted rounded h-[300px]" />
 }

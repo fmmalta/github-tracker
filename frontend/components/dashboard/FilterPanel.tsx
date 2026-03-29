@@ -1,12 +1,6 @@
 'use client'
-import {
-  Box, Button, Collapse, TextField, MenuItem, Select, FormControl, InputLabel, SelectChangeEvent
-} from '@mui/material'
-import { FilterList, ExpandLess, ExpandMore } from '@mui/icons-material'
+import { ChevronDown, ChevronUp, Filter } from 'lucide-react'
 import { useState } from 'react'
-import { DatePicker } from '@mui/x-date-pickers/DatePicker'
-import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider'
-import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs'
 import dayjs from 'dayjs'
 import { useFilterParams } from '@/hooks/useFilterParams'
 import { DATE_PRESETS } from '@/lib/constants'
@@ -33,120 +27,128 @@ export function FilterPanel({
     developerId, setDeveloperId,
     state, setState,
     branch, setBranch,
-    setPreset,
   } = useFilterParams()
 
   return (
-    <LocalizationProvider dateAdapter={AdapterDayjs}>
-      <Box mb={2}>
-        <Button
-          startIcon={<FilterList />}
-          endIcon={open ? <ExpandLess /> : <ExpandMore />}
-          onClick={() => setOpen(!open)}
-          variant="outlined"
-          size="small"
-          aria-expanded={open}
-          aria-controls="filter-panel-content"
+    <div className="mb-4">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        aria-expanded={open}
+        aria-controls="filter-panel-content"
+        className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground border border-border rounded px-3 py-1.5 transition-colors"
+      >
+        <Filter size={14} />
+        {open ? 'Hide Filters' : 'Show Filters'}
+        {open ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+      </button>
+
+      {open && (
+        <div
+          id="filter-panel-content"
+          className="mt-2 p-3 bg-card border border-border rounded-lg"
         >
-          {open ? 'Hide Filters' : 'Show Filters'}
-        </Button>
+          {/* Date presets */}
+          <div className="flex gap-2 mb-3 flex-wrap">
+            {DATE_PRESETS.map((preset) => (
+              <button
+                key={preset.label}
+                type="button"
+                className="text-xs border border-border rounded px-2 py-1 text-muted-foreground hover:text-foreground hover:border-primary transition-colors"
+                onClick={() => {
+                  const { startDate: s, endDate: e } = preset.getDates()
+                  setStartDate(s)
+                  setEndDate(e)
+                }}
+              >
+                {preset.label}
+              </button>
+            ))}
+          </div>
 
-        <Collapse in={open} id="filter-panel-content">
-          <Box sx={{ mt: 2, p: 2, bgcolor: 'white', borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
-            {/* Date presets */}
-            <Box display="flex" gap={1} mb={2} flexWrap="wrap">
-              {DATE_PRESETS.map((preset) => (
-                <Button
-                  key={preset.label}
-                  size="small"
-                  variant="outlined"
-                  onClick={() => {
-                    const { startDate: s, endDate: e } = preset.getDates()
-                    setStartDate(s)
-                    setEndDate(e)
-                  }}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+            <div>
+              <label className="block text-xs text-muted-foreground mb-1">Start Date</label>
+              <input
+                type="date"
+                className="w-full text-sm bg-background border border-border rounded px-2 py-1.5 text-foreground"
+                value={dayjs(startDate).format('YYYY-MM-DD')}
+                onChange={(e) => e.target.value && setStartDate(new Date(e.target.value))}
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-muted-foreground mb-1">End Date</label>
+              <input
+                type="date"
+                className="w-full text-sm bg-background border border-border rounded px-2 py-1.5 text-foreground"
+                value={dayjs(endDate).format('YYYY-MM-DD')}
+                onChange={(e) => e.target.value && setEndDate(new Date(e.target.value))}
+              />
+            </div>
+
+            {repos.length > 0 && (
+              <div>
+                <label className="block text-xs text-muted-foreground mb-1">Repository</label>
+                <select
+                  className="w-full text-sm bg-background border border-border rounded px-2 py-1.5 text-foreground"
+                  value={repoId ?? ''}
+                  onChange={(e) => setRepoId(e.target.value || null)}
                 >
-                  {preset.label}
-                </Button>
-              ))}
-            </Box>
+                  <option value="">All repos</option>
+                  {repos.map((r) => (
+                    <option key={r.id} value={r.id}>{r.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
 
-            <Box display="grid" gridTemplateColumns="repeat(auto-fit, minmax(200px, 1fr))" gap={2}>
-              <DatePicker
-                label="Start Date"
-                value={dayjs(startDate)}
-                onChange={(v) => v && setStartDate(v.toDate())}
-                slotProps={{ textField: { size: 'small', fullWidth: true } }}
-              />
-              <DatePicker
-                label="End Date"
-                value={dayjs(endDate)}
-                onChange={(v) => v && setEndDate(v.toDate())}
-                slotProps={{ textField: { size: 'small', fullWidth: true } }}
-              />
+            {developers.length > 0 && (
+              <div>
+                <label className="block text-xs text-muted-foreground mb-1">Developer</label>
+                <select
+                  className="w-full text-sm bg-background border border-border rounded px-2 py-1.5 text-foreground"
+                  value={developerId ?? ''}
+                  onChange={(e) => setDeveloperId(e.target.value || null)}
+                >
+                  <option value="">All developers</option>
+                  {developers.map((d) => (
+                    <option key={d.id} value={d.id}>{d.login}</option>
+                  ))}
+                </select>
+              </div>
+            )}
 
-              {repos.length > 0 && (
-                <FormControl size="small" fullWidth>
-                  <InputLabel>Repository</InputLabel>
-                  <Select
-                    value={repoId ?? ''}
-                    label="Repository"
-                    onChange={(e: SelectChangeEvent) => setRepoId(e.target.value || null)}
-                  >
-                    <MenuItem value="">All repos</MenuItem>
-                    {repos.map((r) => (
-                      <MenuItem key={r.id} value={r.id}>{r.name}</MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              )}
+            {showStateFilter && (
+              <div>
+                <label className="block text-xs text-muted-foreground mb-1">State</label>
+                <select
+                  className="w-full text-sm bg-background border border-border rounded px-2 py-1.5 text-foreground"
+                  value={state ?? ''}
+                  onChange={(e) => setState(e.target.value || null)}
+                >
+                  <option value="">All states</option>
+                  <option value="open">Open</option>
+                  <option value="merged">Merged</option>
+                  <option value="closed">Closed</option>
+                </select>
+              </div>
+            )}
 
-              {developers.length > 0 && (
-                <FormControl size="small" fullWidth>
-                  <InputLabel>Developer</InputLabel>
-                  <Select
-                    value={developerId ?? ''}
-                    label="Developer"
-                    onChange={(e: SelectChangeEvent) => setDeveloperId(e.target.value || null)}
-                  >
-                    <MenuItem value="">All developers</MenuItem>
-                    {developers.map((d) => (
-                      <MenuItem key={d.id} value={d.id}>{d.login}</MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              )}
-
-              {showStateFilter && (
-                <FormControl size="small" fullWidth>
-                  <InputLabel>State</InputLabel>
-                  <Select
-                    value={state ?? ''}
-                    label="State"
-                    onChange={(e: SelectChangeEvent) => setState(e.target.value || null)}
-                  >
-                    <MenuItem value="">All states</MenuItem>
-                    <MenuItem value="open">Open</MenuItem>
-                    <MenuItem value="merged">Merged</MenuItem>
-                    <MenuItem value="closed">Closed</MenuItem>
-                  </Select>
-                </FormControl>
-              )}
-
-              {showBranchFilter && (
-                <TextField
-                  size="small"
-                  fullWidth
-                  label="Branch"
+            {showBranchFilter && (
+              <div>
+                <label className="block text-xs text-muted-foreground mb-1">Branch</label>
+                <input
+                  type="text"
+                  className="w-full text-sm bg-background border border-border rounded px-2 py-1.5 text-foreground"
+                  placeholder="e.g. main"
                   value={branch ?? ''}
                   onChange={(e) => setBranch(e.target.value || null)}
-                  placeholder="e.g. main"
                 />
-              )}
-            </Box>
-          </Box>
-        </Collapse>
-      </Box>
-    </LocalizationProvider>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
   )
 }

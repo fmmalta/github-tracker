@@ -1,10 +1,7 @@
 'use client'
-import {
-  Box, Typography, Button, Alert, Card, CardContent, Grid, Tabs, Tab, Skeleton,
-} from '@mui/material'
-import { Sync, Lock } from '@mui/icons-material'
 import { useState } from 'react'
 import { parseAsString, useQueryState } from 'nuqs'
+import { RefreshCw, Lock } from 'lucide-react'
 import { Header } from '@/components/dashboard/Header'
 import { SyncStatusBadge } from '@/components/common/SyncStatusBadge'
 import { SyncHistoryTable } from '@/components/admin/SyncHistoryTable'
@@ -14,7 +11,7 @@ import { useAdminSync } from '@/hooks/useAdminSync'
 import { useAuth } from '@/hooks/useAuth'
 import type { HealthStatus } from '@/lib/types'
 
-const COOLDOWN_SECONDS = 3600 // 1 hour
+const COOLDOWN_SECONDS = 3600
 
 function isCooldownActive(lastSync: string | null | undefined): boolean {
   if (!lastSync) return false
@@ -45,82 +42,49 @@ function QueueCard({
 }) {
   const isBreached = threshold !== undefined && value > threshold
   return (
-    <Card
-      sx={{
-        bgcolor: 'background.paper',
-        border: '1px solid',
-        borderColor: isBreached ? '#ef4444' : 'rgba(255,255,255,0.07)',
-        transition: 'border-color 0.2s',
-      }}
+    <div
+      className={`rounded-lg border bg-card p-4 transition-colors ${
+        isBreached ? 'border-red-500' : 'border-border/40'
+      }`}
     >
-      <CardContent>
-        <Typography variant="caption" color="text.secondary" display="block" mb={0.5}>
-          {label}
-        </Typography>
-        <Typography
-          sx={{
-            fontSize: 28,
-            fontWeight: 600,
-            letterSpacing: '-0.01em',
-            lineHeight: 1.2,
-            color: isBreached ? '#ef4444' : 'text.primary',
-          }}
-        >
-          {value}
-        </Typography>
-      </CardContent>
-    </Card>
+      <p className="text-xs text-muted-foreground mb-1">{label}</p>
+      <p className={`text-3xl font-semibold tracking-tight leading-none ${isBreached ? 'text-red-400' : 'text-foreground'}`}>
+        {value}
+      </p>
+    </div>
   )
 }
 
-function OverviewTab({
-  health,
-  isLoading,
-}: {
-  health: HealthStatus | undefined
-  isLoading: boolean
-}) {
+function OverviewTab({ health, isLoading }: { health: HealthStatus | undefined; isLoading: boolean }) {
   if (isLoading) {
     return (
-      <Grid container spacing={2} mb={3}>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4 animate-pulse">
         {[...Array(4)].map((_, i) => (
-          <Grid key={i} size={{ xs: 6, sm: 3 }}>
-            <Skeleton variant="rectangular" height={90} sx={{ borderRadius: 1 }} />
-          </Grid>
+          <div key={i} className="h-[90px] bg-muted rounded-lg" />
         ))}
-      </Grid>
+      </div>
     )
   }
 
   if (!health) {
     return (
-      <Typography color="text.secondary">
-        Queue status unavailable. Data may be stale.
-      </Typography>
+      <p className="text-sm text-muted-foreground">Queue status unavailable. Data may be stale.</p>
     )
   }
 
   const { queue } = health
   return (
-    <Box>
-      <Grid container spacing={2} mb={2}>
-        <Grid size={{ xs: 6, sm: 3 }}>
-          <QueueCard label="Pending" value={queue.pending} threshold={1000} />
-        </Grid>
-        <Grid size={{ xs: 6, sm: 3 }}>
-          <QueueCard label="Active" value={queue.active} />
-        </Grid>
-        <Grid size={{ xs: 6, sm: 3 }}>
-          <QueueCard label="Delayed" value={queue.delayed} />
-        </Grid>
-        <Grid size={{ xs: 6, sm: 3 }}>
-          <QueueCard label="Failed" value={queue.failed} threshold={5} />
-        </Grid>
-      </Grid>
-      <Typography variant="body2" color="text.secondary">
+    <div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
+        <QueueCard label="Pending" value={queue.pending} threshold={1000} />
+        <QueueCard label="Active" value={queue.active} />
+        <QueueCard label="Delayed" value={queue.delayed} />
+        <QueueCard label="Failed" value={queue.failed} threshold={5} />
+      </div>
+      <p className="text-xs text-muted-foreground">
         Oldest pending: {formatRelativeTime(queue.oldest_pending_age_seconds)}
-      </Typography>
-    </Box>
+      </p>
+    </div>
   )
 }
 
@@ -143,58 +107,57 @@ function ManualSyncTab({
   }
 
   return (
-    <Card sx={{ maxWidth: 600, bgcolor: 'background.paper', border: '1px solid rgba(255,255,255,0.07)' }}>
-      <CardContent>
-        <Typography variant="h6" fontWeight={600} gutterBottom>
-          Manual Sync
-        </Typography>
-        <Typography variant="body2" color="text.secondary" mb={2}>
-          Triggers an immediate data sync from GitHub. Use sparingly — syncs run automatically
-          at 2am UTC. Minimum 1 hour between manual syncs.
-        </Typography>
+    <div className="max-w-xl border border-border/40 rounded-lg bg-card p-5">
+      <h3 className="text-base font-semibold text-foreground mb-1">Manual Sync</h3>
+      <p className="text-sm text-muted-foreground mb-4">
+        Triggers an immediate data sync from GitHub. Use sparingly — syncs run automatically
+        at 2am UTC. Minimum 1 hour between manual syncs.
+      </p>
 
-        {isSuccess && hasTriggered && (
-          <Alert severity="success" sx={{ mb: 2 }} onClose={reset}>
-            Sync triggered. GitHub data will be updated within a few minutes.
-          </Alert>
-        )}
-        {isError && (
-          <Alert severity="error" sx={{ mb: 2 }} onClose={reset}>
-            {error?.message ?? 'Failed to trigger sync.'} — If this continues, check the
-            Webhooks tab for failed deliveries.
-          </Alert>
-        )}
-        {cooldown && (
-          <Alert severity="info" sx={{ mb: 2 }}>
-            Sync cooldown active. Available in {remainingMinutes}{' '}
-            {remainingMinutes === 1 ? 'minute' : 'minutes'}.
-          </Alert>
-        )}
+      {isSuccess && hasTriggered && (
+        <div className="border-l-2 border-green-500 bg-green-500/10 text-green-400 p-3 rounded mb-3 text-sm flex justify-between">
+          <span>Sync triggered. GitHub data will be updated within a few minutes.</span>
+          <button type="button" onClick={reset} className="ml-2 hover:text-green-200">×</button>
+        </div>
+      )}
+      {isError && (
+        <div className="border-l-2 border-red-500 bg-red-500/10 text-red-400 p-3 rounded mb-3 text-sm flex justify-between">
+          <span>{error?.message ?? 'Failed to trigger sync.'} — If this continues, check the Webhooks tab for failed deliveries.</span>
+          <button type="button" onClick={reset} className="ml-2 hover:text-red-200">×</button>
+        </div>
+      )}
+      {cooldown && (
+        <div className="border-l-2 border-blue-500 bg-blue-500/10 text-blue-400 p-3 rounded mb-3 text-sm">
+          Sync cooldown active. Available in {remainingMinutes}{' '}
+          {remainingMinutes === 1 ? 'minute' : 'minutes'}.
+        </div>
+      )}
 
-        <Button
-          variant="contained"
-          startIcon={<Sync />}
-          onClick={handleSync}
-          disabled={isPending || cooldown || healthLoading}
-          sx={{
-            bgcolor: '#6366f1',
-            '&:hover': { bgcolor: '#818cf8' },
-            minHeight: 48,
-          }}
-        >
-          {isPending
-            ? 'Triggering...'
-            : cooldown
-              ? `Sync on cooldown (${remainingMinutes}m remaining)`
-              : 'Trigger Sync Now'}
-        </Button>
-      </CardContent>
-    </Card>
+      <button
+        type="button"
+        onClick={handleSync}
+        disabled={isPending || cooldown || healthLoading}
+        className="flex items-center gap-2 bg-primary hover:bg-primary/90 text-white text-sm font-medium rounded px-4 py-2.5 disabled:opacity-50 transition-colors"
+      >
+        <RefreshCw size={14} />
+        {isPending
+          ? 'Triggering...'
+          : cooldown
+            ? `Sync on cooldown (${remainingMinutes}m remaining)`
+            : 'Trigger Sync Now'}
+      </button>
+    </div>
   )
 }
 
 const TAB_SLUGS = ['overview', 'sync-history', 'webhooks', 'manual-sync'] as const
 type TabSlug = (typeof TAB_SLUGS)[number]
+const TAB_LABELS: Record<TabSlug, string> = {
+  'overview': 'Overview',
+  'sync-history': 'Sync History',
+  'webhooks': 'Webhooks',
+  'manual-sync': 'Manual Sync',
+}
 
 export default function AdminPage() {
   const { isAdmin } = useAuth()
@@ -205,24 +168,17 @@ export default function AdminPage() {
     return (
       <>
         <Header title="Admin — Observability" />
-        <Box
-          sx={{ mt: 10 }}
-          display="flex"
-          alignItems="center"
-          gap={1}
-          justifyContent="center"
-        >
-          <Lock sx={{ color: '#ef4444' }} />
-          <Typography color="error">
+        <div className="mt-24 flex items-center justify-center gap-2">
+          <Lock size={16} className="text-red-400" />
+          <p className="text-sm text-red-400">
             Admin access required. Contact your administrator to request access.
-          </Typography>
-        </Box>
+          </p>
+        </div>
       </>
     )
   }
 
-  const tabIndex = TAB_SLUGS.indexOf((tab as TabSlug) ?? 'overview')
-  const activeTab = tabIndex === -1 ? 0 : tabIndex
+  const activeTab = TAB_SLUGS.includes((tab as TabSlug)) ? (tab as TabSlug) : 'overview'
 
   return (
     <>
@@ -230,28 +186,30 @@ export default function AdminPage() {
         title="Admin — Observability"
         rightSlot={<SyncStatusBadge health={health} loading={healthLoading} />}
       />
-      <Box sx={{ mt: 10, mx: 3 }}>
-        <Tabs
-          value={activeTab}
-          onChange={(_, i: number) => setTab(TAB_SLUGS[i])}
-          sx={{
-            mb: 3,
-            '& .MuiTab-root': { color: 'text.secondary', minHeight: 48 },
-            '& .Mui-selected': { color: '#818cf8' },
-            '& .MuiTabs-indicator': { bgcolor: '#6366f1' },
-          }}
-        >
-          <Tab label="Overview" />
-          <Tab label="Sync History" />
-          <Tab label="Webhooks" />
-          <Tab label="Manual Sync" />
-        </Tabs>
+      <div>
+        {/* Tabs */}
+        <div className="flex border-b border-border mb-4">
+          {TAB_SLUGS.map((slug) => (
+            <button
+              key={slug}
+              type="button"
+              onClick={() => setTab(slug)}
+              className={`px-4 py-2.5 text-sm transition-colors border-b-2 -mb-[2px] ${
+                activeTab === slug
+                  ? 'border-primary text-primary font-medium'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {TAB_LABELS[slug]}
+            </button>
+          ))}
+        </div>
 
-        {activeTab === 0 && <OverviewTab health={health} isLoading={healthLoading} />}
-        {activeTab === 1 && <SyncHistoryTable />}
-        {activeTab === 2 && <WebhookDLQTable />}
-        {activeTab === 3 && <ManualSyncTab health={health} healthLoading={healthLoading} />}
-      </Box>
+        {activeTab === 'overview' && <OverviewTab health={health} isLoading={healthLoading} />}
+        {activeTab === 'sync-history' && <SyncHistoryTable />}
+        {activeTab === 'webhooks' && <WebhookDLQTable />}
+        {activeTab === 'manual-sync' && <ManualSyncTab health={health} healthLoading={healthLoading} />}
+      </div>
     </>
   )
 }

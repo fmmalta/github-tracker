@@ -1,6 +1,3 @@
-import { Box, Typography } from '@mui/material'
-import { InfoOutlined } from '@mui/icons-material'
-
 interface DisclaimerBannerProps {
   message?: string
   variant?: 'default' | 'warning'
@@ -12,21 +9,19 @@ export function DisclaimerBanner({
   variant = 'default',
   id,
 }: DisclaimerBannerProps) {
-  const bgcolor = variant === 'warning' ? 'warning.light' : 'info.light'
   return (
-    <Box
+    <div
       id={id}
       role="note"
       aria-label="Metric disclaimer"
-      display="flex"
-      alignItems="center"
-      gap={1}
-      sx={{ p: 1.5, bgcolor, borderRadius: 1, mb: 2 }}
+      className={`flex items-center gap-2 p-3 rounded mb-4 border-l-2 text-sm ${
+        variant === 'warning'
+          ? 'border-yellow-500 bg-yellow-500/10 text-yellow-200'
+          : 'border-blue-500 bg-blue-500/10 text-blue-200'
+      }`}
     >
-      <InfoOutlined fontSize="small" color={variant === 'warning' ? 'warning' : 'info'} />
-      <Typography variant="body2">
-        {message}
-      </Typography>
-    </Box>
+      <span className="shrink-0">ℹ</span>
+      <span>{message}</span>
+    </div>
   )
 }

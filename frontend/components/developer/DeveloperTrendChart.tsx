@@ -2,7 +2,6 @@
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts'
-import { Box, Typography, Skeleton } from '@mui/material'
 import type { TrendDataPoint } from '@/lib/types'
 
 interface DeveloperTrendChartProps {
@@ -11,14 +10,14 @@ interface DeveloperTrendChartProps {
 }
 
 interface WeeklyRow {
-  week_start: string   // "Mar 3", "Mar 10" format for display
+  week_start: string
   pr_count: number
 }
 
 function getMonday(dateStr: string): string {
   const d = new Date(dateStr)
   const day = d.getUTCDay()
-  const diff = (day === 0 ? -6 : 1 - day) // adjust to Monday
+  const diff = (day === 0 ? -6 : 1 - day)
   d.setUTCDate(d.getUTCDate() + diff)
   return d.toISOString().split('T')[0]
 }
@@ -29,7 +28,6 @@ function formatWeekLabel(isoDate: string): string {
 }
 
 function aggregateToWeekly(data: TrendDataPoint[]): WeeklyRow[] {
-  // Use only prs_opened_total to show PRs authored per week
   const weekly = new Map<string, number>()
   for (const point of data) {
     if (point.metric_key !== 'prs_opened_total') continue
@@ -46,30 +44,24 @@ function aggregateToWeekly(data: TrendDataPoint[]): WeeklyRow[] {
 
 export function DeveloperTrendChart({ data, loading = false }: DeveloperTrendChartProps) {
   if (loading) {
-    return <Skeleton variant="rectangular" height={240} sx={{ borderRadius: 1 }} />
+    return <div className="animate-pulse bg-muted rounded h-[240px]" />
   }
 
   const chartData = aggregateToWeekly(data)
 
   if (chartData.length === 0) {
     return (
-      <Box
-        height={240}
-        display="flex"
-        alignItems="center"
-        justifyContent="center"
-        sx={{ border: '1px solid rgba(255,255,255,0.07)', borderRadius: 1 }}
-      >
-        <Typography color="text.secondary">No PR data for the last 90 days.</Typography>
-      </Box>
+      <div className="h-[240px] flex items-center justify-center border border-border/40 rounded">
+        <p className="text-muted-foreground text-sm">No PR data for the last 90 days.</p>
+      </div>
     )
   }
 
   return (
-    <Box>
-      <Typography variant="subtitle1" fontWeight={600} mb={1} letterSpacing="-0.01em">
+    <div>
+      <p className="text-sm font-semibold text-foreground mb-2 tracking-tight">
         PR Activity — Last 90 Days (Weekly)
-      </Typography>
+      </p>
       <ResponsiveContainer width="100%" height={240}>
         <BarChart data={chartData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.07)" />
@@ -89,6 +81,6 @@ export function DeveloperTrendChart({ data, loading = false }: DeveloperTrendCha
           <Bar dataKey="pr_count" fill="#6366f1" radius={[2, 2, 0, 0]} />
         </BarChart>
       </ResponsiveContainer>
-    </Box>
+    </div>
   )
 }

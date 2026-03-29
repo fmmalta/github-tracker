@@ -1,6 +1,5 @@
 'use client'
 import { useForm } from 'react-hook-form'
-import { Box, Card, CardContent, TextField, Button, Typography, Alert } from '@mui/material'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 
@@ -27,27 +26,48 @@ export default function LoginPage() {
       const { accessToken, refreshToken } = await res.json()
       localStorage.setItem('accessToken', accessToken)
       localStorage.setItem('refreshToken', refreshToken)
-      router.push('/dashboard')
+      document.cookie = 'auth_present=true; path=/; max-age=2592000'
+      router.push('/')
     } catch {
       setApiError('Network error. Please try again.')
     }
   }
 
   return (
-    <Card sx={{ minWidth: 380, maxWidth: 440 }}>
-      <CardContent sx={{ p: 4 }}>
-        <Typography variant="h5" fontWeight="bold" mb={3}>
-          GitHub Analytics Platform
-        </Typography>
-        {apiError && <Alert severity="error" sx={{ mb: 2 }}>{apiError}</Alert>}
-        <Box component="form" onSubmit={handleSubmit(onSubmit)} display="flex" flexDirection="column" gap={2}>
-          <TextField label="Email" type="email" {...register('email', { required: 'Email required' })} error={!!errors.email} helperText={errors.email?.message} />
-          <TextField label="Password" type="password" {...register('password', { required: 'Password required', minLength: { value: 8, message: 'Min 8 characters' } })} error={!!errors.password} helperText={errors.password?.message} />
-          <Button type="submit" variant="contained" size="large" disabled={isSubmitting} sx={{ mt: 1 }}>
-            {isSubmitting ? 'Signing in...' : 'Sign in'}
-          </Button>
-        </Box>
-      </CardContent>
-    </Card>
+    <div className="w-full max-w-sm border border-border rounded-lg bg-card p-8">
+      <h1 className="text-lg font-bold text-foreground mb-6">GitHub Analytics Platform</h1>
+      {apiError && (
+        <div className="border-l-2 border-red-500 bg-red-500/10 text-red-400 p-3 rounded mb-4 text-sm">
+          {apiError}
+        </div>
+      )}
+      <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
+        <div>
+          <label className="block text-xs text-muted-foreground mb-1">Email</label>
+          <input
+            type="email"
+            className="w-full text-sm bg-background border border-border rounded px-3 py-2 text-foreground focus:outline-none focus:border-primary"
+            {...register('email', { required: 'Email required' })}
+          />
+          {errors.email && <p className="text-xs text-red-400 mt-1">{errors.email.message}</p>}
+        </div>
+        <div>
+          <label className="block text-xs text-muted-foreground mb-1">Password</label>
+          <input
+            type="password"
+            className="w-full text-sm bg-background border border-border rounded px-3 py-2 text-foreground focus:outline-none focus:border-primary"
+            {...register('password', { required: 'Password required', minLength: { value: 8, message: 'Min 8 characters' } })}
+          />
+          {errors.password && <p className="text-xs text-red-400 mt-1">{errors.password.message}</p>}
+        </div>
+        <button
+          type="submit"
+          disabled={isSubmitting}
+          className="mt-1 bg-primary hover:bg-primary/90 text-white text-sm font-medium rounded px-4 py-2.5 disabled:opacity-50 transition-colors"
+        >
+          {isSubmitting ? 'Signing in...' : 'Sign in'}
+        </button>
+      </form>
+    </div>
   )
 }

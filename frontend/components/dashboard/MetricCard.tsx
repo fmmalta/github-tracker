@@ -1,6 +1,5 @@
 'use client'
-import { Card, CardContent, Typography, IconButton, Popover, Box, Skeleton } from '@mui/material'
-import { HelpOutline } from '@mui/icons-material'
+import { HelpCircle } from 'lucide-react'
 import { useState } from 'react'
 import type { MetricDefinition } from '@/lib/types'
 
@@ -13,75 +12,65 @@ export interface MetricCardProps {
 }
 
 export function MetricCard({ label, value, unit, definition, loading = false }: MetricCardProps) {
-  const [anchorEl, setAnchorEl] = useState<HTMLButtonElement | null>(null)
-  const open = Boolean(anchorEl)
-  const popoverId = open ? `metric-popover-${definition.key}` : undefined
+  const [showTooltip, setShowTooltip] = useState(false)
 
   if (loading) {
     return (
-      <Card>
-        <CardContent>
-          <Skeleton variant="text" width="70%" />
-          <Skeleton variant="text" height={60} width="50%" sx={{ my: 0.5 }} />
-          <Skeleton variant="text" width="40%" />
-        </CardContent>
-      </Card>
+      <div className="rounded-lg border border-border bg-card p-4 animate-pulse">
+        <div className="h-4 bg-muted rounded w-[70%] mb-3" />
+        <div className="h-10 bg-muted rounded w-[50%] mb-3" />
+        <div className="h-3 bg-muted rounded w-[40%]" />
+      </div>
     )
   }
 
   return (
-    <Card>
-      <CardContent>
-        <Box display="flex" justifyContent="space-between" alignItems="flex-start">
-          <Typography variant="body2" color="text.secondary" fontWeight={500}>
-            {label}
-          </Typography>
-          <IconButton
-            size="small"
-            aria-label={`Learn more about ${label}`}
-            aria-describedby={popoverId}
-            onClick={(e) => setAnchorEl(e.currentTarget)}
-          >
-            <HelpOutline fontSize="small" color="action" />
-          </IconButton>
-        </Box>
+    <div className="rounded-lg border border-border bg-card p-4 relative">
+      <div className="flex justify-between items-start">
+        <span className="text-sm text-muted-foreground font-medium">{label}</span>
+        <button
+          type="button"
+          aria-label={`Learn more about ${label}`}
+          onClick={() => setShowTooltip(!showTooltip)}
+          className="text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <HelpCircle size={14} />
+        </button>
+      </div>
 
-        <Typography variant="h4" fontWeight="bold" sx={{ my: 1 }}>
+      <div className="my-2">
+        <span className="text-3xl font-bold text-foreground">
           {typeof value === 'number' ? value.toLocaleString() : value}
-          {unit && (
-            <Typography component="span" variant="body1" color="text.secondary" ml={0.5}>
-              {unit}
-            </Typography>
-          )}
-        </Typography>
+        </span>
+        {unit && (
+          <span className="text-sm text-muted-foreground ml-1">{unit}</span>
+        )}
+      </div>
 
-        <Typography variant="caption" color="text.secondary">
-          See help icon for details
-        </Typography>
-      </CardContent>
+      <span className="text-xs text-muted-foreground">See help icon for details</span>
 
-      <Popover
-        id={popoverId}
-        open={open}
-        anchorEl={anchorEl}
-        onClose={() => setAnchorEl(null)}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
-        transformOrigin={{ vertical: 'top', horizontal: 'left' }}
-      >
-        <Box sx={{ p: 2, maxWidth: 320 }} role="dialog" aria-label={`${label} definition`}>
-          <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
-            {definition.name}
-          </Typography>
-          <Typography variant="body2" gutterBottom>
-            {definition.formula}
-          </Typography>
-          <Box sx={{ p: 1.5, bgcolor: 'warning.light', borderRadius: 1, mt: 1 }}>
-            <Typography variant="caption">
+      {showTooltip && (
+        <div
+          role="dialog"
+          aria-label={`${label} definition`}
+          className="absolute top-full left-0 mt-1 z-20 w-72 bg-card border border-border rounded-lg p-3 shadow-lg"
+        >
+          <p className="text-sm font-semibold text-foreground mb-1">{definition.name}</p>
+          <p className="text-sm text-muted-foreground mb-2">{definition.formula}</p>
+          <div className="border-l-2 border-yellow-500 pl-2 bg-yellow-500/10 rounded-r p-1.5">
+            <p className="text-xs text-foreground">
               <strong>Disclaimer:</strong> {definition.disclaimer}
-            </Typography>
-          </Box>
-        </Box>
-      </Popover>
-    </Card>
+            </p>
+          </div>
+          <button
+            type="button"
+            className="mt-2 text-xs text-muted-foreground hover:text-foreground"
+            onClick={() => setShowTooltip(false)}
+          >
+            Close
+          </button>
+        </div>
+      )}
+    </div>
   )
 }

@@ -1,5 +1,4 @@
 'use client'
-import { Box, Grid, Typography } from '@mui/material'
 import { Header } from '@/components/dashboard/Header'
 import { MetricCard } from '@/components/dashboard/MetricCard'
 import { TrendChart } from '@/components/dashboard/TrendChart'
@@ -9,19 +8,18 @@ import { FilterPanel } from '@/components/dashboard/FilterPanel'
 import { useOrgMetrics } from '@/hooks/useOrgMetrics'
 import { useTrends } from '@/hooks/useTrends'
 import { useHealth } from '@/hooks/useHealth'
-import { DEFAULT_ORG_ID } from '@/lib/constants'
+import { useFirstOrgId } from '@/hooks/useOrgs'
 import type { AggregatedMetric } from '@/lib/types'
 
-// Display these 4 KPIs prominently; filter from API response by metric_key
 const FEATURED_METRICS: string[] = [
-  'PRS_OPENED_TOTAL',
-  'PRS_MERGED_TOTAL',
-  'AVG_TIME_TO_MERGE_HOURS',
-  'REVIEWS_SUBMITTED_TOTAL',
+  'prs_opened_total',
+  'prs_merged_total',
+  'avg_time_to_merge_hours',
+  'reviews_submitted_total',
 ]
 
 export default function OrgOverviewPage() {
-  const orgId = DEFAULT_ORG_ID
+  const orgId = useFirstOrgId()
   const { data: metricsData, isLoading: metricsLoading } = useOrgMetrics(orgId)
   const { data: trendsData, isLoading: trendsLoading } = useTrends(orgId)
   const { data: health, isLoading: healthLoading } = useHealth()
@@ -37,31 +35,28 @@ export default function OrgOverviewPage() {
         rightSlot={<SyncStatusBadge health={health} loading={healthLoading} />}
       />
 
-      <Box>
+      <div>
         <FilterPanel />
 
-        <Typography variant="h6" fontWeight={600} mb={2}>
-          Key Metrics
-        </Typography>
+        <h2 className="text-base font-semibold text-foreground mb-3">Key Metrics</h2>
 
         {metricsLoading ? (
           <MetricGridSkeleton count={4} />
         ) : (
-          <Grid container spacing={2} sx={{ mb: 4 }}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-6">
             {featuredMetrics.map((metric) => (
-              <Grid key={metric.metric_key} size={{ xs: 12, sm: 6, md: 3 }}>
-                <MetricCard
-                  label={metric.definition.name}
-                  value={metric.total}
-                  unit={metric.definition.unit !== 'count' ? metric.definition.unit : undefined}
-                  definition={metric.definition}
-                />
-              </Grid>
+              <MetricCard
+                key={metric.metric_key}
+                label={metric.definition.name}
+                value={metric.total}
+                unit={metric.definition.unit !== 'count' ? metric.definition.unit : undefined}
+                definition={metric.definition}
+              />
             ))}
-          </Grid>
+          </div>
         )}
 
-        <Box mt={3}>
+        <div className="mt-4">
           {trendsLoading ? (
             <ChartSkeleton />
           ) : (
@@ -70,8 +65,8 @@ export default function OrgOverviewPage() {
               title="PR Trend — Opened vs Merged (Selected Period)"
             />
           )}
-        </Box>
-      </Box>
+        </div>
+      </div>
     </>
   )
 }

@@ -2,7 +2,6 @@
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from 'recharts'
-import { Box, Typography, Skeleton } from '@mui/material'
 import type { TrendDataPoint } from '@/lib/types'
 
 interface TrendChartProps {
@@ -21,8 +20,8 @@ function groupTrendData(data: TrendDataPoint[]): ChartRow[] {
   const byDate = new Map<string, ChartRow>()
   for (const point of data) {
     const existing = byDate.get(point.date) ?? { date: point.date, opened: 0, merged: 0 }
-    if (point.metric_key === 'PRS_OPENED_TOTAL') existing.opened = point.value
-    if (point.metric_key === 'PRS_MERGED_TOTAL') existing.merged = point.value
+    if (point.metric_key === 'prs_opened_total') existing.opened = point.value
+    if (point.metric_key === 'prs_merged_total') existing.merged = point.value
     byDate.set(point.date, existing)
   }
   return Array.from(byDate.values()).sort((a, b) => a.date.localeCompare(b.date))
@@ -30,22 +29,22 @@ function groupTrendData(data: TrendDataPoint[]): ChartRow[] {
 
 export function TrendChart({ data, loading = false, title = 'PR Trend (Opened vs Merged)' }: TrendChartProps) {
   if (loading) {
-    return <Skeleton variant="rectangular" height={300} sx={{ borderRadius: 1 }} />
+    return <div className="animate-pulse bg-muted rounded h-[300px]" />
   }
 
   const chartData = groupTrendData(data)
 
   if (chartData.length === 0) {
     return (
-      <Box height={300} display="flex" alignItems="center" justifyContent="center">
-        <Typography color="text.secondary">No trend data available for the selected period.</Typography>
-      </Box>
+      <div className="h-[300px] flex items-center justify-center">
+        <p className="text-muted-foreground text-sm">No trend data available for the selected period.</p>
+      </div>
     )
   }
 
   return (
-    <Box>
-      <Typography variant="subtitle1" fontWeight={600} mb={1}>{title}</Typography>
+    <div>
+      <p className="text-sm font-semibold text-foreground mb-2">{title}</p>
       <ResponsiveContainer width="100%" height={300}>
         <LineChart data={chartData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
@@ -63,10 +62,10 @@ export function TrendChart({ data, loading = false, title = 'PR Trend (Opened vs
             labelFormatter={(label) => `Date: ${label}`}
           />
           <Legend formatter={(value: string) => value === 'opened' ? 'PRs Opened' : 'PRs Merged'} />
-          <Line type="monotone" dataKey="opened" stroke="#1976d2" strokeWidth={2} dot={false} name="opened" />
-          <Line type="monotone" dataKey="merged" stroke="#2e7d32" strokeWidth={2} dot={false} name="merged" />
+          <Line type="monotone" dataKey="opened" stroke="#6366f1" strokeWidth={2} dot={false} name="opened" />
+          <Line type="monotone" dataKey="merged" stroke="#22c55e" strokeWidth={2} dot={false} name="merged" />
         </LineChart>
       </ResponsiveContainer>
-    </Box>
+    </div>
   )
 }

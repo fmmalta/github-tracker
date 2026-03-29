@@ -1,8 +1,4 @@
 'use client'
-import {
-  Box, Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
-  Typography, Chip, Skeleton, Alert
-} from '@mui/material'
 import type { DeveloperReview } from '@/lib/types'
 
 interface ReviewHistoryTableProps {
@@ -11,21 +7,18 @@ interface ReviewHistoryTableProps {
   isError: boolean
 }
 
-function ReviewStateChip({ state }: { state: DeveloperReview['state'] }) {
-  const map: Record<DeveloperReview['state'], { label: string; color: string }> = {
-    approved: { label: 'Approved', color: '#22c55e' },
-    changes_requested: { label: 'Changes Requested', color: '#ef4444' },
-    commented: { label: 'Commented', color: '#64748b' },
-    dismissed: { label: 'Dismissed', color: '#64748b' },
+function ReviewStateBadge({ state }: { state: DeveloperReview['state'] }) {
+  const map: Record<DeveloperReview['state'], { label: string; cls: string }> = {
+    approved: { label: 'Approved', cls: 'text-green-400 border-green-500/30' },
+    changes_requested: { label: 'Changes Requested', cls: 'text-red-400 border-red-500/30' },
+    commented: { label: 'Commented', cls: 'text-muted-foreground border-border' },
+    dismissed: { label: 'Dismissed', cls: 'text-muted-foreground border-border' },
   }
   const cfg = map[state] ?? map.commented
   return (
-    <Chip
-      label={cfg.label}
-      size="small"
-      variant="outlined"
-      sx={{ color: cfg.color, borderColor: cfg.color, fontSize: 12 }}
-    />
+    <span className={`inline-flex items-center text-xs border rounded px-1.5 py-0.5 ${cfg.cls}`}>
+      {cfg.label}
+    </span>
   )
 }
 
@@ -37,53 +30,61 @@ function formatDate(iso: string): string {
 
 export function ReviewHistoryTable({ reviews, isLoading, isError }: ReviewHistoryTableProps) {
   if (isLoading) {
-    return <Box>{[...Array(8)].map((_, i) => <Skeleton key={i} height={52} sx={{ mb: 0.5 }} />)}</Box>
+    return (
+      <div className="animate-pulse space-y-1">
+        {[...Array(8)].map((_, i) => <div key={i} className="h-13 bg-muted rounded" />)}
+      </div>
+    )
   }
 
   if (isError) {
-    return <Alert severity="error">Failed to load review history.</Alert>
+    return (
+      <div className="border-l-2 border-red-500 bg-red-500/10 text-red-400 p-3 rounded text-sm">
+        Failed to load review history.
+      </div>
+    )
   }
 
   if (reviews.length === 0) {
     return (
-      <Box py={8} textAlign="center">
-        <Typography color="text.secondary">
+      <div className="py-12 text-center">
+        <p className="text-sm text-muted-foreground">
           No reviews recorded for this developer in the available data range.
-        </Typography>
-      </Box>
+        </p>
+      </div>
     )
   }
 
   return (
-    <TableContainer>
-      <Table size="small">
-        <TableHead>
-          <TableRow>
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b border-border">
             {['PR Title', 'Repo', 'Review State', 'Date Reviewed'].map((h) => (
-              <TableCell key={h} sx={{ color: 'text.secondary', fontSize: 14 }}>{h}</TableCell>
+              <th key={h} className="text-left text-xs text-muted-foreground font-medium py-2 px-3">
+                {h}
+              </th>
             ))}
-          </TableRow>
-        </TableHead>
-        <TableBody>
+          </tr>
+        </thead>
+        <tbody>
           {reviews.map((review) => (
-            <TableRow key={review.id} sx={{ '&:hover': { bgcolor: 'rgba(255,255,255,0.02)' } }}>
-              <TableCell sx={{ maxWidth: 300 }}>
-                <Typography
-                  variant="body2"
-                  noWrap
+            <tr key={review.id} className="border-b border-border/50 hover:bg-white/[0.02]">
+              <td className="py-2 px-3 max-w-[300px]">
+                <span
+                  className="text-xs text-foreground truncate block max-w-[280px]"
                   title={review.pr_title}
-                  sx={{ maxWidth: 280 }}
                 >
                   #{review.pr_number} {review.pr_title}
-                </Typography>
-              </TableCell>
-              <TableCell sx={{ fontSize: 14, color: 'text.secondary' }}>{review.repo_name}</TableCell>
-              <TableCell><ReviewStateChip state={review.state} /></TableCell>
-              <TableCell sx={{ fontSize: 14 }}>{formatDate(review.date_reviewed)}</TableCell>
-            </TableRow>
+                </span>
+              </td>
+              <td className="py-2 px-3 text-xs text-muted-foreground">{review.repo_name}</td>
+              <td className="py-2 px-3"><ReviewStateBadge state={review.state} /></td>
+              <td className="py-2 px-3 text-xs text-foreground">{formatDate(review.date_reviewed)}</td>
+            </tr>
           ))}
-        </TableBody>
-      </Table>
-    </TableContainer>
+        </tbody>
+      </table>
+    </div>
   )
 }

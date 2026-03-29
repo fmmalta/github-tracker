@@ -1,12 +1,10 @@
 'use client'
-import {
-  Box, Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
-  Typography, Button, Alert, Tooltip, TablePagination,
-} from '@mui/material'
 import { useState } from 'react'
 import { useWebhookDlq } from '@/hooks/useWebhookDlq'
 import { useWebhookRetry } from '@/hooks/useWebhookRetry'
 import type { WebhookDelivery } from '@/lib/types'
+
+const PAGE_SIZE = 50
 
 export function WebhookDLQTable() {
   const [page, setPage] = useState(0)
@@ -17,33 +15,30 @@ export function WebhookDLQTable() {
 
   if (isLoading) {
     return (
-      <Box>
+      <div className="animate-pulse space-y-1">
         {[...Array(8)].map((_, i) => (
-          <Box
-            key={i}
-            sx={{ height: 52, mb: 0.5, bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 1 }}
-          />
+          <div key={i} className="h-13 bg-muted/30 rounded" />
         ))}
-      </Box>
+      </div>
     )
   }
 
   if (isError) {
-    return <Alert severity="error">Failed to load webhook deliveries.</Alert>
+    return (
+      <div className="border-l-2 border-red-500 bg-red-500/10 text-red-400 p-3 rounded text-sm">
+        Failed to load webhook deliveries.
+      </div>
+    )
   }
 
   const rows = data?.data ?? []
 
   if (rows.length === 0 && page === 0) {
     return (
-      <Box py={8} textAlign="center">
-        <Typography variant="body1" color="text.secondary" fontWeight={600}>
-          No failed webhooks.
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          All deliveries are processing normally.
-        </Typography>
-      </Box>
+      <div className="py-12 text-center">
+        <p className="text-sm font-semibold text-muted-foreground">No failed webhooks.</p>
+        <p className="text-xs text-muted-foreground mt-1">All deliveries are processing normally.</p>
+      </div>
     )
   }
 
@@ -55,115 +50,111 @@ export function WebhookDLQTable() {
     })
   }
 
+  const total = data?.total ?? 0
+  const totalPages = Math.ceil(total / PAGE_SIZE)
+
   return (
-    <Box>
+    <div>
       {retryErrorId && (
-        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setRetryErrorId(null)}>
-          Retry failed. Try again or contact your system administrator.
-        </Alert>
+        <div className="border-l-2 border-red-500 bg-red-500/10 text-red-400 p-3 rounded mb-3 text-sm flex justify-between">
+          <span>Retry failed. Try again or contact your system administrator.</span>
+          <button type="button" onClick={() => setRetryErrorId(null)} className="ml-2 hover:text-red-200">×</button>
+        </div>
       )}
-      <TableContainer>
-        <Table size="small">
-          <TableHead>
-            <TableRow>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-border">
               {['Delivery ID', 'Event', 'Received', 'Error', 'Retries', 'Action'].map((h) => (
-                <TableCell key={h} sx={{ color: 'text.secondary', fontSize: 12, fontWeight: 500 }}>
+                <th key={h} className="text-left text-xs text-muted-foreground font-medium py-2 px-3">
                   {h}
-                </TableCell>
+                </th>
               ))}
-            </TableRow>
-          </TableHead>
-          <TableBody>
+            </tr>
+          </thead>
+          <tbody>
             {rows.map((delivery) => (
               <>
-                <TableRow
+                <tr
                   key={delivery.id}
                   onClick={() => setExpandedId(expandedId === delivery.id ? null : delivery.id)}
-                  sx={{ cursor: 'pointer', '&:hover': { bgcolor: 'rgba(255,255,255,0.02)' } }}
+                  className="border-b border-border/50 hover:bg-white/[0.02] cursor-pointer"
                 >
-                  <TableCell sx={{ fontFamily: 'monospace', fontSize: 12 }}>
+                  <td className="py-2 px-3 font-mono text-xs">
                     {delivery.delivery_id.slice(0, 16)}…
-                  </TableCell>
-                  <TableCell sx={{ fontSize: 13 }}>{delivery.event_type}</TableCell>
-                  <TableCell sx={{ fontSize: 13 }}>
+                  </td>
+                  <td className="py-2 px-3 text-xs text-foreground">{delivery.event_type}</td>
+                  <td className="py-2 px-3 text-xs text-foreground">
                     {new Date(delivery.received_at).toLocaleString()}
-                  </TableCell>
-                  <TableCell sx={{ maxWidth: 200 }}>
+                  </td>
+                  <td className="py-2 px-3 max-w-[200px]">
                     {delivery.error_message ? (
-                      <Tooltip title={delivery.error_message}>
-                        <Typography
-                          variant="body2"
-                          noWrap
-                          sx={{ maxWidth: 200, cursor: 'help', color: '#ef4444', fontSize: 13 }}
-                        >
-                          {delivery.error_message.slice(0, 60)}
-                          {delivery.error_message.length > 60 ? '…' : ''}
-                        </Typography>
-                      </Tooltip>
+                      <span
+                        title={delivery.error_message}
+                        className="text-xs text-red-400 cursor-help truncate block max-w-[200px]"
+                      >
+                        {delivery.error_message.slice(0, 60)}{delivery.error_message.length > 60 ? '…' : ''}
+                      </span>
                     ) : (
-                      <Typography variant="body2" color="text.secondary">—</Typography>
+                      <span className="text-xs text-muted-foreground">—</span>
                     )}
-                  </TableCell>
-                  <TableCell sx={{ fontSize: 13 }}>{delivery.retry_count}</TableCell>
-                  <TableCell>
-                    <Button
-                      size="small"
-                      variant="outlined"
+                  </td>
+                  <td className="py-2 px-3 text-xs text-foreground">{delivery.retry_count}</td>
+                  <td className="py-2 px-3">
+                    <button
+                      type="button"
                       disabled={
                         retryMutation.isPending && retryMutation.variables === delivery.id
                       }
                       onClick={(e) => handleRetry(delivery, e)}
-                      sx={{
-                        minHeight: 36,
-                        borderColor: '#6366f1',
-                        color: '#6366f1',
-                        '&:hover': { borderColor: '#818cf8', color: '#818cf8' },
-                        '&:focus': { outlineColor: '#6366f1' },
-                        '&.Mui-disabled': { opacity: 0.5 },
-                      }}
+                      className="text-xs border border-primary text-primary hover:border-primary/80 hover:text-primary/80 rounded px-2 py-1 disabled:opacity-50 transition-colors min-h-[32px]"
                     >
                       {retryMutation.isPending && retryMutation.variables === delivery.id
                         ? 'Retrying...'
                         : 'Retry'}
-                    </Button>
-                  </TableCell>
-                </TableRow>
+                    </button>
+                  </td>
+                </tr>
                 {expandedId === delivery.id && (
-                  <TableRow key={`${delivery.id}-expanded`}>
-                    <TableCell colSpan={6} sx={{ p: 0, bgcolor: '#1a1a24' }}>
-                      <Box
-                        component="pre"
-                        sx={{
-                          m: 0,
-                          p: 2,
-                          fontSize: 13,
-                          fontFamily: 'monospace',
-                          color: '#f1f5f9',
-                          maxHeight: 200,
-                          overflow: 'auto',
-                          whiteSpace: 'pre-wrap',
-                          wordBreak: 'break-all',
-                        }}
+                  <tr key={`${delivery.id}-expanded`}>
+                    <td colSpan={6} className="p-0 bg-[#1a1a24]">
+                      <pre
+                        className="m-0 p-4 text-xs font-mono text-[#f1f5f9] max-h-[200px] overflow-auto whitespace-pre-wrap break-all"
                       >
                         {JSON.stringify(delivery.payload_json, null, 2)}
-                      </Box>
-                    </TableCell>
-                  </TableRow>
+                      </pre>
+                    </td>
+                  </tr>
                 )}
               </>
             ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
-      <TablePagination
-        component="div"
-        count={data?.total ?? 0}
-        page={page}
-        rowsPerPage={50}
-        rowsPerPageOptions={[50]}
-        onPageChange={(_, p) => setPage(p)}
-        sx={{ color: 'text.secondary' }}
-      />
-    </Box>
+          </tbody>
+        </table>
+      </div>
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between px-3 py-2 border-t border-border text-xs text-muted-foreground">
+          <span>{total} total</span>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              disabled={page === 0}
+              onClick={() => setPage(page - 1)}
+              className="px-2 py-1 border border-border rounded disabled:opacity-40 hover:text-foreground transition-colors"
+            >
+              Prev
+            </button>
+            <span className="px-2 py-1">Page {page + 1} of {totalPages}</span>
+            <button
+              type="button"
+              disabled={page >= totalPages - 1}
+              onClick={() => setPage(page + 1)}
+              className="px-2 py-1 border border-border rounded disabled:opacity-40 hover:text-foreground transition-colors"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   )
 }
