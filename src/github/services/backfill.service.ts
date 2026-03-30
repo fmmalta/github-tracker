@@ -70,12 +70,10 @@ export class BackfillService {
 
     let totalPrs = 0;
     let totalReviews = 0;
+    let reposCompleted = 0;
 
-    for (let i = 0; i < repos.length; i++) {
-      const repo = repos[i];
-
+    const processRepo = async (repo: (typeof repos)[number]) => {
       try {
-        // Upsert repository and get its DB id back in one step
         await this.repoRepo.upsert(
           {
             github_id: repo.id,
@@ -121,15 +119,18 @@ export class BackfillService {
         }));
       }
 
+      reposCompleted++;
       if (onProgress) {
         await onProgress({
-          reposSynced: i + 1,
+          reposSynced: reposCompleted,
           prsSynced: totalPrs,
           reviewsSynced: totalReviews,
           currentRepo: repo.full_name,
         });
       }
-    }
+    };
+
+    await this.processWithConcurrency(repos, processRepo, 3);
 
     return { reposSynced: repos.length, prsSynced: totalPrs, reviewsSynced: totalReviews };
   }
@@ -186,6 +187,8 @@ export class BackfillService {
         return { data: res.data, headers: res.headers as Record<string, string> };
       });
 
+      const pendingReviewFetches: { prNumber: number; prEntityId: string }[] = [];
+
       for (const pr of prList) {
         if (new Date(pr.created_at) < cutoffDate) {
           reachedCutoff = true;
@@ -238,10 +241,19 @@ export class BackfillService {
 
         // Look up the PR's DB uuid for the reviews FK
         const prEntity = await this.prRepo.findOneOrFail({ where: { github_id: pr.id } });
-        const prReviews = await this.backfillReviews(octokit, owner, repo, pr.number, orgId, prEntity.id);
-        reviewsProcessed += prReviews;
+        pendingReviewFetches.push({ prNumber: pr.number, prEntityId: prEntity.id });
         prsProcessed++;
       }
+
+      // Fetch reviews for this page's PRs in parallel (3 at a time)
+      await this.processWithConcurrency(
+        pendingReviewFetches,
+        async (item) => {
+          const prReviews = await this.backfillReviews(octokit, owner, repo, item.prNumber, orgId, item.prEntityId);
+          reviewsProcessed += prReviews;
+        },
+        3,
+      );
 
       if (reachedCutoff || prList.length < 100) break;
       page++;
@@ -315,5 +327,23 @@ export class BackfillService {
       }));
       return null;
     }
+  }
+
+  private async processWithConcurrency<T>(
+    items: T[],
+    fn: (item: T) => Promise<void>,
+    concurrency: number,
+  ): Promise<void> {
+    let index = 0;
+
+    const worker = async () => {
+      while (index < items.length) {
+        const item = items[index++];
+        await fn(item);
+      }
+    };
+
+    const workers = Array.from({ length: Math.min(concurrency, items.length) }, () => worker());
+    await Promise.all(workers);
   }
 }
