@@ -95,6 +95,18 @@ export class BackfillService {
           org.id,
           repoEntity.id,
           cutoffDate,
+          onProgress
+            ? async (prsDelta: number, reviewsDelta: number) => {
+                totalPrs += prsDelta;
+                totalReviews += reviewsDelta;
+                await onProgress({
+                  reposSynced: reposCompleted,
+                  prsSynced: totalPrs,
+                  reviewsSynced: totalReviews,
+                  currentRepo: repo.full_name,
+                });
+              }
+            : undefined,
         );
 
         totalPrs += prsProcessed;
@@ -167,11 +179,13 @@ export class BackfillService {
     orgId: string,
     repoId: string,
     cutoffDate: Date,
+    onRepoProgress?: (prsDelta: number, reviewsDelta: number) => Promise<void>,
   ): Promise<{ prsProcessed: number; reviewsProcessed: number }> {
     let prsProcessed = 0;
     let reviewsProcessed = 0;
     let page = 1;
     let reachedCutoff = false;
+    let prsInThisBatch = 0;
 
     while (!reachedCutoff) {
       const prList = await this.rateLimitService.withRateLimitHandling(async () => {
@@ -243,14 +257,45 @@ export class BackfillService {
         const prEntity = await this.prRepo.findOneOrFail({ where: { github_id: pr.id } });
         pendingReviewFetches.push({ prNumber: pr.number, prEntityId: prEntity.id });
         prsProcessed++;
+        prsInThisBatch++;
+
+        this.logger.debug(JSON.stringify({
+          message: 'pr_saved',
+          repo: `${owner}/${repo}`,
+          pr_number: pr.number,
+        }));
+
+        // Heartbeat every 10 PRs to keep the job alive
+        if (onRepoProgress && prsInThisBatch % 10 === 0) {
+          await onRepoProgress(prsInThisBatch, 0);
+          prsInThisBatch = 0;
+        }
       }
 
       // Fetch reviews for this page's PRs in parallel (3 at a time)
+      this.logger.debug(JSON.stringify({
+        message: 'fetching_reviews_batch',
+        repo: `${owner}/${repo}`,
+        pr_count: pendingReviewFetches.length,
+      }));
+
       await this.processWithConcurrency(
         pendingReviewFetches,
         async (item) => {
           const prReviews = await this.backfillReviews(octokit, owner, repo, item.prNumber, orgId, item.prEntityId);
           reviewsProcessed += prReviews;
+
+          this.logger.debug(JSON.stringify({
+            message: 'reviews_saved',
+            repo: `${owner}/${repo}`,
+            pr_number: item.prNumber,
+            review_count: prReviews,
+          }));
+
+          // Heartbeat after each PR's reviews are processed
+          if (onRepoProgress && prReviews > 0) {
+            await onRepoProgress(0, prReviews);
+          }
         },
         3,
       );
