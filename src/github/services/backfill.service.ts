@@ -28,6 +28,9 @@ type OctokitClient = Awaited<ReturnType<GitHubAppService['getOctokitForInstallat
 export class BackfillService {
   private readonly logger = new Logger(BackfillService.name);
   private readonly BACKFILL_WINDOW_DAYS = 90;
+  private readonly MAX_REPOS_PER_ORG = 500; // Prevent infinite loops on massive orgs
+  private readonly MAX_PR_PAGES = 50; // Max 5000 PRs per repo (100 per page)
+  private readonly MAX_REVIEW_PAGES = 100; // Max 10000 reviews per PR (100 per page)
 
   constructor(
     private readonly githubAppService: GitHubAppService,
@@ -151,7 +154,7 @@ export class BackfillService {
     const repos: { id: number; name: string; full_name: string; private: boolean; language: string | null }[] = [];
     let page = 1;
 
-    while (true) {
+    while (page <= this.MAX_REPOS_PER_ORG / 100) {
       const pageRepos = await this.rateLimitService.withRateLimitHandling(async () => {
         const res = await octokit.rest.repos.listForOrg({ org: orgLogin, type: 'all', per_page: 100, page });
         return { data: res.data, headers: res.headers as Record<string, string> };
@@ -167,6 +170,12 @@ export class BackfillService {
 
       if (pageRepos.length < 100) break;
       page++;
+
+      // Stop if we've reached max repos limit
+      if (repos.length >= this.MAX_REPOS_PER_ORG) {
+        this.logger.warn(`Organization ${orgLogin} has >500 repos, stopping backfill to prevent timeout`);
+        break;
+      }
     }
 
     return repos;
@@ -187,7 +196,7 @@ export class BackfillService {
     let reachedCutoff = false;
     let prsInThisBatch = 0;
 
-    while (!reachedCutoff) {
+    while (!reachedCutoff && page <= this.MAX_PR_PAGES) {
       const prList = await this.rateLimitService.withRateLimitHandling(async () => {
         const res = await octokit.rest.pulls.list({
           owner,
@@ -315,10 +324,27 @@ export class BackfillService {
     orgId: string,
     pullRequestId: string,
   ): Promise<number> {
-    const reviews = await this.rateLimitService.withRateLimitHandling(async () => {
-      const res = await octokit.rest.pulls.listReviews({ owner, repo, pull_number: prNumber, per_page: 100 });
-      return { data: res.data, headers: res.headers as Record<string, string> };
-    });
+    const reviews: any[] = [];
+    let page = 1;
+
+    // Paginate through reviews with max page limit
+    while (page <= this.MAX_REVIEW_PAGES) {
+      const pageReviews = await this.rateLimitService.withRateLimitHandling(async () => {
+        const res = await octokit.rest.pulls.listReviews({
+          owner,
+          repo,
+          pull_number: prNumber,
+          per_page: 100,
+          page,
+        });
+        return { data: res.data, headers: res.headers as Record<string, string> };
+      });
+
+      reviews.push(...pageReviews);
+
+      if (pageReviews.length < 100) break;
+      page++;
+    }
 
     for (const review of reviews) {
       if (!review.user) continue;

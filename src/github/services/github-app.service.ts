@@ -70,6 +70,7 @@ export class GitHubAppService {
   async getOctokitForInstallation(installationId: number) {
     const token = await this.getInstallationToken(installationId);
     const { Octokit } = await import('@octokit/rest');
-    return new Octokit({ auth: token });
+    // Increased timeout to 90s for large repos with paginated requests
+    return new Octokit({ auth: token, request: { timeout: 90_000 } });
   }
 }
