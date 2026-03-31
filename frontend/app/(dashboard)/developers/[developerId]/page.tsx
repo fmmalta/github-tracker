@@ -24,6 +24,8 @@ const FEATURED_DEV_METRICS = [
   'prs_merged',
   'avg_time_to_merge_hours',
   'reviews_submitted',
+  'prs_failed_ci',
+  'commits',
 ]
 
 const TAB_SLUGS = ['overview', 'prs', 'reviews'] as const

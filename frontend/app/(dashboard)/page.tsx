@@ -16,6 +16,9 @@ const FEATURED_METRICS: string[] = [
   'prs_merged_total',
   'avg_time_to_merge_hours',
   'reviews_submitted_total',
+  'prs_failed_ci_total',
+  'deploys_total',
+  'commits_total',
 ]
 
 export default function OrgOverviewPage() {

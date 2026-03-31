@@ -21,6 +21,9 @@ const FEATURED_REPO_METRICS = [
   'prs_merged_total',
   'avg_time_to_merge_hours',
   'additions',
+  'prs_failed_ci_total',
+  'deploys',
+  'commits_total',
 ]
 
 interface DevPRCount {

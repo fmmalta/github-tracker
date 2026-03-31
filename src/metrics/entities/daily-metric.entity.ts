@@ -17,6 +17,15 @@ export enum MetricKey {
   PRS_OPENED_TOTAL = 'prs_opened_total',      // org or repo totals (no developer_id)
   PRS_MERGED_TOTAL = 'prs_merged_total',
   REVIEWS_SUBMITTED_TOTAL = 'reviews_submitted_total',
+  // Failed CI proxy — PRs closed without merge (best available proxy without CI data)
+  PRS_FAILED_CI = 'prs_failed_ci',            // per-developer count
+  PRS_FAILED_CI_TOTAL = 'prs_failed_ci_total', // repo/org total (no developer_id)
+  // Deploy proxy — PRs merged to default branch (main/master/production/prod)
+  DEPLOYS = 'deploys',              // per-repo deploy count
+  DEPLOYS_TOTAL = 'deploys_total',  // org-level total deploys (no repo_id)
+  // Commit counts
+  COMMITS = 'commits',              // per developer per repo per day
+  COMMITS_TOTAL = 'commits_total',  // per repo or org total (no developer_id)
 }
 
 @Entity('daily_metrics')

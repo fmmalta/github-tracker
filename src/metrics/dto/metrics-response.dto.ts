@@ -68,9 +68,9 @@ export const METRIC_DEFINITIONS: Record<MetricKey, MetricDefinition> = {
   [MetricKey.AVG_TIME_TO_MERGE_HOURS]: {
     key: MetricKey.AVG_TIME_TO_MERGE_HOURS,
     name: 'Average Time to Merge',
-    formula: 'AVG((merged_at - created_at) in hours) for PRs where state=merged',
+    formula: 'AVG((merged_at - created_at) in hours) for PRs merged within 30 days (outliers >30 days excluded)',
     unit: 'hours',
-    disclaimer: 'Draft PRs and abandoned PRs are excluded. Longer times may reflect thorough review, not slow delivery.',
+    disclaimer: 'PRs taking more than 30 days to merge are excluded to prevent outlier skew. Longer times may reflect thorough review, not slow delivery.',
   },
   [MetricKey.AVG_PR_SIZE]: {
     key: MetricKey.AVG_PR_SIZE,
@@ -99,6 +99,48 @@ export const METRIC_DEFINITIONS: Record<MetricKey, MetricDefinition> = {
     formula: 'COUNT of all code reviews submitted in the date range for this repository',
     unit: 'count',
     disclaimer: 'Repository-level aggregate.',
+  },
+  [MetricKey.PRS_FAILED_CI]: {
+    key: MetricKey.PRS_FAILED_CI,
+    name: 'PRs Closed Without Merge (CI Proxy)',
+    formula: 'COUNT of pull requests where closed_at falls within the date range and state=closed and merged_at IS NULL, per developer',
+    unit: 'count',
+    disclaimer: 'Proxy metric: uses PRs closed without merge as a stand-in for CI/pipeline failures. This includes abandoned PRs, superseded work, and declined PRs — not exclusively CI failures. Interpret with caution.',
+  },
+  [MetricKey.PRS_FAILED_CI_TOTAL]: {
+    key: MetricKey.PRS_FAILED_CI_TOTAL,
+    name: 'Total PRs Closed Without Merge (CI Proxy)',
+    formula: 'COUNT of all pull requests closed without merge in the date range for this repository',
+    unit: 'count',
+    disclaimer: 'Repository-level aggregate. Proxy metric: uses PRs closed without merge as a stand-in for CI/pipeline failures. Context is required to interpret accurately.',
+  },
+  [MetricKey.DEPLOYS]: {
+    key: MetricKey.DEPLOYS,
+    name: 'Deploys',
+    formula: 'COUNT of PRs merged to main/master/production branch per day',
+    unit: 'count',
+    disclaimer: 'Uses PR merges to default branch as a deploy proxy. Does not capture direct pushes or CD pipeline deploys.',
+  },
+  [MetricKey.DEPLOYS_TOTAL]: {
+    key: MetricKey.DEPLOYS_TOTAL,
+    name: 'Total Deploys (Organization)',
+    formula: 'COUNT of all PRs merged to main/master/production across all repositories',
+    unit: 'count',
+    disclaimer: 'Organization-level deploy proxy. See per-repository breakdown for individual repo deploy frequency.',
+  },
+  [MetricKey.COMMITS]: {
+    key: MetricKey.COMMITS,
+    name: 'Commits',
+    formula: 'COUNT of commits where committed_at falls within the date range',
+    unit: 'count',
+    disclaimer: 'Counts commits associated with pull requests. Direct pushes to branches may not be captured.',
+  },
+  [MetricKey.COMMITS_TOTAL]: {
+    key: MetricKey.COMMITS_TOTAL,
+    name: 'Total Commits (Repository)',
+    formula: 'COUNT of all commits in the date range for this repository',
+    unit: 'count',
+    disclaimer: 'Repository-level aggregate. Includes all developers.',
   },
 };
 

@@ -13,6 +13,12 @@ export type MetricKey =
   | 'reviews_submitted'
   | 'reviews_submitted_total'
   | 'avg_pr_size'
+  | 'prs_failed_ci'
+  | 'prs_failed_ci_total'
+  | 'deploys'
+  | 'deploys_total'
+  | 'commits'
+  | 'commits_total'
 
 export interface MetricDefinition {
   key: MetricKey

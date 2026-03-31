@@ -124,7 +124,13 @@ export class AggregationService {
             ELSE NULL
           END
         ) as avg_first_review_hours,
-        AVG(EXTRACT(EPOCH FROM (github_merged_at - github_created_at)) / 3600) as avg_merge_hours,
+        -- Cap at 720 hours (30 days) to exclude long-lived outlier PRs from skewing the average
+        AVG(
+          CASE WHEN EXTRACT(EPOCH FROM (github_merged_at - github_created_at)) / 3600 <= 720
+            THEN EXTRACT(EPOCH FROM (github_merged_at - github_created_at)) / 3600
+            ELSE NULL
+          END
+        ) as avg_merge_hours,
         AVG(additions + deletions) as avg_pr_size
       FROM pull_requests
       WHERE github_merged_at >= $1 AND github_merged_at <= $2
@@ -178,6 +184,87 @@ export class AggregationService {
     `, [dayStart, dayEnd]);
     for (const r of reviewsTotals) {
       rows.push({ metricDate, orgId: r.org_id, repoId: r.repository_id, developerId: null, branch: null, metricKey: MetricKey.REVIEWS_SUBMITTED_TOTAL, metricValue: Number(r.cnt) });
+    }
+
+    // prs_failed_ci — per-developer count of PRs closed without merge (proxy for CI failure/abandonment)
+    const prsFailedCi: Array<{
+      author_id: string; repository_id: string; org_id: string; base_branch: string; cnt: string;
+    }> = await this.dataSource.query(`
+      SELECT author_id, repository_id, org_id, base_branch, COUNT(*) as cnt
+      FROM pull_requests
+      WHERE github_closed_at >= $1 AND github_closed_at <= $2
+        AND state = 'closed' AND github_merged_at IS NULL AND author_id IS NOT NULL
+      GROUP BY author_id, repository_id, org_id, base_branch
+    `, [dayStart, dayEnd]);
+    for (const r of prsFailedCi) {
+      rows.push({ metricDate, orgId: r.org_id, repoId: r.repository_id, developerId: r.author_id, branch: r.base_branch, metricKey: MetricKey.PRS_FAILED_CI, metricValue: Number(r.cnt) });
+    }
+
+    // prs_failed_ci_total — repo/org aggregate (no developer breakdown)
+    const prsFailedCiTotals: Array<{ repository_id: string; org_id: string; cnt: string }> = await this.dataSource.query(`
+      SELECT repository_id, org_id, COUNT(*) as cnt
+      FROM pull_requests
+      WHERE github_closed_at >= $1 AND github_closed_at <= $2
+        AND state = 'closed' AND github_merged_at IS NULL
+      GROUP BY repository_id, org_id
+    `, [dayStart, dayEnd]);
+    for (const r of prsFailedCiTotals) {
+      rows.push({ metricDate, orgId: r.org_id, repoId: r.repository_id, developerId: null, branch: null, metricKey: MetricKey.PRS_FAILED_CI_TOTAL, metricValue: Number(r.cnt) });
+    }
+
+    // deploys — PRs merged to default branch (main/master/production/prod) as deploy proxy
+    const deploys: Array<{ repository_id: string; org_id: string; cnt: string }> = await this.dataSource.query(`
+      SELECT repository_id, org_id, COUNT(*) as cnt
+      FROM pull_requests
+      WHERE github_merged_at >= $1 AND github_merged_at <= $2
+        AND state = 'merged'
+        AND (base_branch = 'main' OR base_branch = 'master' OR base_branch = 'production' OR base_branch = 'prod')
+      GROUP BY repository_id, org_id
+    `, [dayStart, dayEnd]);
+    for (const r of deploys) {
+      rows.push({ metricDate, orgId: r.org_id, repoId: r.repository_id, developerId: null, branch: null, metricKey: MetricKey.DEPLOYS, metricValue: Number(r.cnt) });
+    }
+
+    // deploys_total — org-level aggregate (no repo_id)
+    const deploysTotals: Array<{ org_id: string; cnt: string }> = await this.dataSource.query(`
+      SELECT org_id, COUNT(*) as cnt
+      FROM pull_requests
+      WHERE github_merged_at >= $1 AND github_merged_at <= $2
+        AND state = 'merged'
+        AND (base_branch = 'main' OR base_branch = 'master' OR base_branch = 'production' OR base_branch = 'prod')
+      GROUP BY org_id
+    `, [dayStart, dayEnd]);
+    for (const r of deploysTotals) {
+      rows.push({ metricDate, orgId: r.org_id, repoId: null, developerId: null, branch: null, metricKey: MetricKey.DEPLOYS_TOTAL, metricValue: Number(r.cnt) });
+    }
+
+    // Commits per developer per repo
+    const commitsPerDev: Array<{
+      author_id: string; org_id: string; repository_id: string; cnt: string;
+    }> = await this.dataSource.query(`
+      SELECT c.author_id, c.org_id, pr.repository_id, COUNT(*) as cnt
+      FROM commits c
+      JOIN pull_requests pr ON pr.id = c.pull_request_id
+      WHERE c.committed_at >= $1 AND c.committed_at <= $2
+        AND c.author_id IS NOT NULL
+      GROUP BY c.author_id, c.org_id, pr.repository_id
+    `, [dayStart, dayEnd]);
+
+    for (const r of commitsPerDev) {
+      rows.push({ metricDate, orgId: r.org_id, repoId: r.repository_id, developerId: r.author_id, branch: null, metricKey: MetricKey.COMMITS, metricValue: Number(r.cnt) });
+    }
+
+    // Commits total per repo/org
+    const commitsTotals: Array<{ org_id: string; repository_id: string; cnt: string }> = await this.dataSource.query(`
+      SELECT c.org_id, pr.repository_id, COUNT(*) as cnt
+      FROM commits c
+      JOIN pull_requests pr ON pr.id = c.pull_request_id
+      WHERE c.committed_at >= $1 AND c.committed_at <= $2
+      GROUP BY c.org_id, pr.repository_id
+    `, [dayStart, dayEnd]);
+
+    for (const r of commitsTotals) {
+      rows.push({ metricDate, orgId: r.org_id, repoId: r.repository_id, developerId: null, branch: null, metricKey: MetricKey.COMMITS_TOTAL, metricValue: Number(r.cnt) });
     }
 
     if (rows.length > 0) {
