@@ -75,6 +75,7 @@ export interface Repository {
   name: string
   full_name: string
   org_id: string
+  github_created_at: string | null
   created_at: string
   updated_at: string
 }
@@ -162,6 +163,7 @@ export interface DeveloperReview {
   pr_number: number
   pr_html_url: string | null
   repo_name: string
+  base_branch: string
   state: 'approved' | 'changes_requested' | 'commented' | 'dismissed'
   date_reviewed: string
 }

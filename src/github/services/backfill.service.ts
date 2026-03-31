@@ -99,6 +99,7 @@ export class BackfillService {
             full_name: repo.full_name,
             is_private: repo.private,
             language: repo.language ?? null,
+            github_created_at: repo.created_at ? new Date(repo.created_at) : null,
             org_id: org.id,
           },
           { conflictPaths: ['github_id'] },
@@ -176,7 +177,14 @@ export class BackfillService {
   }
 
   private async fetchAllRepos(octokit: OctokitClient, orgLogin: string) {
-    const repos: { id: number; name: string; full_name: string; private: boolean; language: string | null }[] = [];
+    const repos: {
+      id: number;
+      name: string;
+      full_name: string;
+      private: boolean;
+      language: string | null;
+      created_at: string | null | undefined;
+    }[] = [];
     let page = 1;
 
     while (page <= this.MAX_REPOS_PER_ORG / 100) {
@@ -191,6 +199,7 @@ export class BackfillService {
         full_name: r.full_name,
         private: r.private,
         language: r.language ?? null,
+        created_at: r.created_at,
       })));
 
       if (pageRepos.length < 100) break;

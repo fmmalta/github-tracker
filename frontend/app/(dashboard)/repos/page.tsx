@@ -43,7 +43,7 @@ export default function ReposPage() {
                     </td>
                     <td className="py-2 px-4 text-sm text-muted-foreground">{repo.full_name}</td>
                     <td className="py-2 px-4 text-sm text-muted-foreground">
-                      {new Date(repo.created_at).toLocaleDateString()}
+                      {new Date(repo.github_created_at ?? repo.created_at).toLocaleDateString()}
                     </td>
                   </tr>
                 ))}

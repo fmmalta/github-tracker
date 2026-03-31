@@ -29,6 +29,9 @@ export class Repository {
   @Column({ type: 'boolean', default: true })
   is_active!: boolean;
 
+  @Column({ type: 'timestamptz', nullable: true })
+  github_created_at!: Date | null;
+
   // org_id scoping for multi-org expansion (DATA-07)
   @Index()
   @ManyToOne(() => Organization, org => org.repositories)

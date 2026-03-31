@@ -10,6 +10,7 @@ import { UserRepoAssignment } from './entities/user-repo-assignment.entity';
 import { RefreshToken } from './entities/refresh-token.entity';
 import { PasswordResetOtp } from './entities/password-reset-otp.entity';
 import { AuditLog } from './entities/audit-log.entity';
+import { Repository as GithubRepository } from '../github/entities/repository.entity';
 
 import { UserRepository } from './repositories/user.repository';
 import { RefreshTokenRepository } from './repositories/refresh-token.repository';
@@ -31,6 +32,7 @@ import { OrgScopingGuard } from './guards/org-scoping.guard';
       RefreshToken,
       PasswordResetOtp,
       AuditLog,
+      GithubRepository,
     ]),
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
