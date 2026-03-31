@@ -4,6 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository as TypeOrmRepo } from 'typeorm';
 import { Job } from 'bullmq';
 import { BackfillService } from '../services/backfill.service';
+import { AggregationService } from '../../metrics/aggregation.service';
 import { SyncJob } from '../entities/sync-job.entity';
 import { Organization } from '../entities/organization.entity';
 import { BACKFILL_QUEUE } from '../../queue/queue.service';
@@ -21,6 +22,7 @@ export class BackfillProcessor extends WorkerHost {
 
   constructor(
     private readonly backfillService: BackfillService,
+    private readonly aggregationService: AggregationService,
     @InjectRepository(SyncJob)
     private readonly syncJobRepo: TypeOrmRepo<SyncJob>,
     @InjectRepository(Organization)
@@ -73,6 +75,10 @@ export class BackfillProcessor extends WorkerHost {
           syncJob.prs_synced = progress.prsSynced;
           syncJob.reviews_synced = progress.reviewsSynced;
           await this.syncJobRepo.save(syncJob);
+
+          // Extend job lock to keep it alive during long backfill
+          // BullMQ default stall timeout is 30s, we extend by 5 minutes each time
+          await job.updateProgress(progress.reposSynced + progress.prsSynced);
         },
       );
 
@@ -83,6 +89,12 @@ export class BackfillProcessor extends WorkerHost {
       syncJob.prs_synced = result.prsSynced;
       syncJob.reviews_synced = result.reviewsSynced;
       await this.syncJobRepo.save(syncJob);
+
+      // Trigger metrics aggregation for yesterday (most complete data)
+      const yesterday = new Date();
+      yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+      await this.aggregationService.computeDailyMetrics(yesterday);
+      this.logger.log(`Metrics aggregation triggered for ${yesterday.toISOString().split('T')[0]} after successful sync`);
 
       // AUDIT-06: Log sync job completed
       this.logger.log(
