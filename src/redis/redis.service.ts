@@ -8,9 +8,19 @@ export class RedisService implements OnModuleDestroy {
   readonly client: Redis;
 
   constructor(private configService: ConfigService) {
+    const isProduction = this.configService.get<string>('NODE_ENV') === 'production';
+    const redisPassword = this.configService.get<string>('REDIS_PASSWORD');
+    const redisTls = this.configService.get<string>('REDIS_TLS', 'false') === 'true';
+
+    if (isProduction && !redisPassword) {
+      throw new Error('[SECURITY] REDIS_PASSWORD is required in production. Refusing to start with unauthenticated Redis.');
+    }
+
     this.client = new Redis({
       host: this.configService.get<string>('REDIS_HOST', 'localhost'),
       port: this.configService.get<number>('REDIS_PORT', 6379),
+      password: redisPassword || undefined,
+      tls: redisTls ? {} : undefined,
       retryStrategy: (times: number) => {
         const delay = Math.min(times * 50, 2000);
         return delay;

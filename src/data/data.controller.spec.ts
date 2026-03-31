@@ -83,6 +83,57 @@ describe('DataController - Admin Endpoints', () => {
   });
 });
 
+describe('DataController - Org Enumeration Security', () => {
+  let controller: DataController;
+
+  const mockDataService = {
+    getSyncHistory: jest.fn(),
+    getWebhookDlq: jest.fn(),
+    retryWebhookDelivery: jest.fn(),
+    getOrgs: jest.fn(),
+    getRepos: jest.fn(),
+    getDevelopers: jest.fn(),
+    getPullRequests: jest.fn(),
+    getDeveloperReviews: jest.fn(),
+  };
+
+  beforeEach(async () => {
+    jest.clearAllMocks();
+
+    const module: TestingModule = await Test.createTestingModule({
+      controllers: [DataController],
+      providers: [
+        { provide: DataService, useValue: mockDataService },
+        Reflector,
+      ],
+    })
+      .overrideGuard(OrgScopingGuard)
+      .useValue(mockOrgScopingGuard)
+      .compile();
+
+    controller = module.get<DataController>(DataController);
+  });
+
+  it('passes userId and role to getOrgs for non-admin users', async () => {
+    mockDataService.getOrgs.mockResolvedValue([]);
+    const viewer = { id: 'user-1', email: 'v@test.com', role: 'viewer' };
+
+    await controller.getOrgs(viewer as any);
+
+    expect(mockDataService.getOrgs).toHaveBeenCalledWith('user-1', 'viewer');
+  });
+
+  it('passes userId and role to getOrgs for admin users', async () => {
+    mockDataService.getOrgs.mockResolvedValue([{ id: 'org-1', login: 'acme', name: 'Acme' }]);
+    const admin = { id: 'admin-1', email: 'a@test.com', role: 'admin' };
+
+    const result = await controller.getOrgs(admin as any);
+
+    expect(mockDataService.getOrgs).toHaveBeenCalledWith('admin-1', 'admin');
+    expect(result).toHaveLength(1);
+  });
+});
+
 describe('DataController - Developer Reviews Endpoint', () => {
   let controller: DataController;
 

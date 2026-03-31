@@ -1,10 +1,10 @@
 import { Controller, Post, Body, HttpCode, HttpStatus, Req, Res, UnauthorizedException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { SignupDto } from './dto/signup.dto';
 import { LoginDto } from './dto/login.dto';
-import { RefreshDto } from './dto/refresh.dto';
 import { RequestOtpDto } from './dto/request-otp.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { Public } from './decorators/roles.decorator';
@@ -12,7 +12,14 @@ import { Public } from './decorators/roles.decorator';
 @ApiTags('Authentication')
 @Controller('api/v1/auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  private readonly trustProxy: boolean;
+
+  constructor(
+    private readonly authService: AuthService,
+    private readonly configService: ConfigService,
+  ) {
+    this.trustProxy = this.configService.get<string>('TRUST_PROXY', 'false') === 'true';
+  }
 
   private extractCookie(req: Request, name: string): string | null {
     const cookieHeader = req.headers.cookie;
@@ -23,12 +30,14 @@ export class AuthController {
     return decodeURIComponent(target.slice(name.length + 1));
   }
 
-  private getClientIp(req: Request): string {
-    const forwarded = req.headers['x-forwarded-for'];
-    if (typeof forwarded === 'string' && forwarded.length > 0) {
-      return forwarded.split(',')[0].trim();
+  getClientIp(req: Request): string {
+    if (this.trustProxy) {
+      const forwarded = req.headers['x-forwarded-for'];
+      if (typeof forwarded === 'string' && forwarded.length > 0) {
+        return forwarded.split(',')[0].trim();
+      }
     }
-    return req.ip ?? 'unknown';
+    return req.ip ?? req.socket?.remoteAddress ?? 'unknown';
   }
 
   @Public()
@@ -98,19 +107,48 @@ export class AuthController {
   @Public()
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Refresh access token', description: 'Returns new access token using refresh token cookie (or request body fallback).' })
+  @ApiOperation({ summary: 'Refresh access token', description: 'Rotates refresh token via HttpOnly cookie and returns new access token.' })
   @ApiResponse({ status: 200, description: 'Token refreshed', schema: { properties: { accessToken: { type: 'string' } } } })
   @ApiResponse({ status: 401, description: 'Invalid or expired refresh token' })
-  @ApiResponse({ status: 400, description: 'Validation error' })
   async refresh(
-    @Body() dto: RefreshDto,
     @Req() req: Request,
+    @Res({ passthrough: true }) res?: Response,
   ) {
-    const refreshToken = dto.refresh_token ?? this.extractCookie(req, 'refresh_token');
+    const refreshToken = this.extractCookie(req, 'refresh_token');
     if (!refreshToken) {
       throw new UnauthorizedException('Missing refresh token');
     }
-    return this.authService.refresh(refreshToken, this.getClientIp(req));
+    const result = await this.authService.refresh(refreshToken, this.getClientIp(req));
+    const isProd = process.env.NODE_ENV === 'production';
+    if (res) {
+      res.cookie('refresh_token', result.refreshToken, {
+        httpOnly: true,
+        secure: isProd,
+        sameSite: 'strict',
+        path: '/api/v1/auth',
+        maxAge: 30 * 24 * 60 * 60 * 1000,
+      });
+    }
+    return { accessToken: result.accessToken };
+  }
+
+  @Public()
+  @Post('logout')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Logout and revoke session', description: 'Revokes refresh token family and clears session.' })
+  @ApiResponse({ status: 200, description: 'Logged out successfully' })
+  async logout(
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const refreshToken = this.extractCookie(req, 'refresh_token');
+    if (refreshToken) {
+      await this.authService.logout(refreshToken);
+    }
+    const isProd = process.env.NODE_ENV === 'production';
+    res.cookie('refresh_token', '', { httpOnly: true, secure: isProd, sameSite: 'strict', path: '/api/v1/auth', maxAge: 0 });
+    res.cookie('auth_present', '', { httpOnly: false, secure: isProd, sameSite: 'strict', path: '/', maxAge: 0 });
+    return { message: 'Logged out successfully' };
   }
 
   @Public()

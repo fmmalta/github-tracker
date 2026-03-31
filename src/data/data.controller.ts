@@ -21,10 +21,10 @@ export class DataController {
   constructor(private readonly dataService: DataService) {}
 
   @Get('orgs')
-  @ApiOperation({ summary: 'List all active organizations' })
+  @ApiOperation({ summary: 'List active organizations visible to the current user' })
   @ApiResponse({ status: 200, description: 'List of organizations' })
-  async getOrgs() {
-    return this.dataService.getOrgs();
+  async getOrgs(@CurrentUser() user: AuthenticatedUser) {
+    return this.dataService.getOrgs(user.id, user.role);
   }
 
   @Get('orgs/:orgId/repos')

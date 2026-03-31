@@ -135,9 +135,19 @@ export class MetricsController {
   @Public()
   @Get('health')
   @ApiTags('Health')
-  @ApiOperation({ summary: 'System health check' })
-  @ApiResponse({ status: 200, description: 'System is healthy' })
+  @ApiOperation({ summary: 'Public liveness check (minimal)' })
+  @ApiResponse({ status: 200, description: 'System is alive' })
   async getHealth() {
+    return { status: 'ok' };
+  }
+
+  @Get('admin/health')
+  @Roles('admin')
+  @ApiTags('Health')
+  @ApiOperation({ summary: 'Admin diagnostics (queue, sync, metrics internals)' })
+  @ApiResponse({ status: 200, description: 'Detailed health status' })
+  @ApiResponse({ status: 403, description: 'Admin role required' })
+  async getAdminHealth() {
     return this.metricsService.getHealth();
   }
 }

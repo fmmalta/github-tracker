@@ -3,6 +3,11 @@ dist/
 coverage/
 frontend/.next/
 .env
-.env.local
+.env.*
+!.env.example
 *.js.map
 .omc/*
+*.pem
+*.key
+credentials.json
+secrets.json

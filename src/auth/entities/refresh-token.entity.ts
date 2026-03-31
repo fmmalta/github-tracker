@@ -16,7 +16,11 @@ export class RefreshToken {
 
   @Index()
   @Column({ type: 'varchar', length: 512 })
-  token_hash!: string;  // SHA-256 hash of the actual refresh token (never store plaintext)
+  token_hash!: string;
+
+  @Index()
+  @Column({ type: 'uuid' })
+  token_family!: string;
 
   @Column({ type: 'timestamp with time zone' })
   expires_at!: Date;

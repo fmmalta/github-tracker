@@ -1,12 +1,18 @@
 import type { NextConfig } from 'next'
 
+const isDev = process.env.NODE_ENV === 'development'
+
 const csp = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+  isDev
+    ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'"
+    : "script-src 'self' 'unsafe-inline'",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: https:",
   "font-src 'self' data:",
-  "connect-src 'self' http://localhost:3000 https:",
+  isDev
+    ? "connect-src 'self' http://localhost:3000 ws://localhost:3001 https:"
+    : "connect-src 'self' https:",
   "frame-ancestors 'none'",
   "object-src 'none'",
   "base-uri 'self'",

@@ -43,9 +43,9 @@ export class AuthService {
     const secret = this.configService.getOrThrow<string>('JWT_SECRET');
     const accessToken = this.jwtService.sign(
       { sub: userId, email, role },
-      { secret, expiresIn: '7d' },
+      { secret, expiresIn: '15m' },
     );
-    const refreshToken = crypto.randomBytes(64).toString('hex'); // opaque token
+    const refreshToken = crypto.randomBytes(64).toString('hex');
     return { accessToken, refreshToken };
   }
 
@@ -89,8 +89,16 @@ export class AuthService {
     if (existing) throw new ConflictException('Email already registered');
 
     const totalUsers = await this.userRepository.countActiveUsers();
-    const isFirstAdmin = totalUsers === 0;
-    const role = isFirstAdmin ? UserRole.ADMIN : UserRole.VIEWER;
+    let isFirstAdmin = totalUsers === 0;
+    let role = isFirstAdmin ? UserRole.ADMIN : UserRole.VIEWER;
+
+    if (isFirstAdmin) {
+      const acquired = await this.redisService.setNx('auth:first-admin-lock', '1', 30);
+      if (!acquired) {
+        isFirstAdmin = false;
+        role = UserRole.VIEWER;
+      }
+    }
 
     const hashed_password = await bcrypt.hash(password, 12);
     const user = await this.userRepository.create({ email, hashed_password, role, is_first_admin: isFirstAdmin });
@@ -134,7 +142,7 @@ export class AuthService {
     return { accessToken, refreshToken };
   }
 
-  async refresh(refreshToken: string, ipAddress: string): Promise<{ accessToken: string }> {
+  async refresh(refreshToken: string, ipAddress: string): Promise<{ accessToken: string; refreshToken: string }> {
     await this.enforceRateLimit(
       `auth:refresh:ip:${ipAddress}`,
       this.REFRESH_WINDOW_SECONDS,
@@ -142,7 +150,15 @@ export class AuthService {
       'Too many token refresh attempts from this IP. Please try again later.',
     );
 
-    const tokenRecord = await this.refreshTokenRepository.findValid(refreshToken);
+    const tokenRecord = await this.refreshTokenRepository.findByHash(refreshToken);
+
+    if (tokenRecord && tokenRecord.revoked) {
+      this.logger.warn(`[SECURITY] Refresh token replay detected for family=${tokenRecord.token_family} user=${tokenRecord.user_id}`);
+      await this.refreshTokenRepository.revokeFamily(tokenRecord.token_family);
+      await this.redisService.del(`session:${tokenRecord.user_id}`);
+      throw new UnauthorizedException('Token reuse detected — session revoked');
+    }
+
     if (!tokenRecord || tokenRecord.expires_at < new Date()) {
       throw new UnauthorizedException('Invalid or expired refresh token');
     }
@@ -150,13 +166,31 @@ export class AuthService {
     const user = await this.userRepository.findById(tokenRecord.user_id);
     if (!user) throw new UnauthorizedException('User not found');
 
-    // Check Redis session (inactivity timeout)
     const session = await this.redisService.get(`session:${user.id}`);
     if (!session) throw new UnauthorizedException('Session expired due to inactivity');
 
-    await this.setSession(user.id); // Reset inactivity timer
-    const { accessToken } = this.issueTokens(user.id, user.email, user.role);
-    return { accessToken };
+    await this.refreshTokenRepository.revoke(refreshToken);
+
+    const tokens = this.issueTokens(user.id, user.email, user.role);
+    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    await this.refreshTokenRepository.create({
+      userId: user.id,
+      token: tokens.refreshToken,
+      expiresAt,
+      ipAddress,
+      tokenFamily: tokenRecord.token_family,
+    });
+
+    await this.setSession(user.id);
+    return { accessToken: tokens.accessToken, refreshToken: tokens.refreshToken };
+  }
+
+  async logout(refreshToken: string): Promise<void> {
+    const tokenRecord = await this.refreshTokenRepository.findValid(refreshToken);
+    if (tokenRecord) {
+      await this.refreshTokenRepository.revokeFamily(tokenRecord.token_family);
+      await this.redisService.del(`session:${tokenRecord.user_id}`);
+    }
   }
 
   async requestOtp(email: string, ipAddress: string): Promise<void> {
@@ -203,10 +237,12 @@ export class AuthService {
       'Too many OTP verification attempts from this IP. Please try again later.',
     );
 
+    const genericError = 'Invalid or expired OTP';
+
     const user = await this.userRepository.findByEmail(email);
     if (!user) {
-      await this.incrementRateLimitCounter(`auth:otp:verify:fail:${normalizedEmail}`, this.OTP_VERIFY_WINDOW_SECONDS);
-      throw new BadRequestException('Invalid OTP or email');
+      await this.trackOtpFailure(normalizedEmail);
+      throw new BadRequestException(genericError);
     }
 
     const otpRecord = await this.otpRepository.findOne({
@@ -215,15 +251,8 @@ export class AuthService {
     });
 
     if (!otpRecord || otpRecord.expires_at < new Date()) {
-      const failKey = `auth:otp:verify:fail:${normalizedEmail}`;
-      const failedAttempts = await this.incrementRateLimitCounter(failKey, this.OTP_VERIFY_WINDOW_SECONDS);
-      if (failedAttempts >= this.OTP_VERIFY_MAX_FAILED_ATTEMPTS) {
-        await this.redisService.set(`auth:otp:lock:${normalizedEmail}`, '1', this.OTP_LOCK_SECONDS);
-        await this.redisService.del(failKey);
-        throw new HttpException('Too many invalid OTP attempts. Please try again later.', HttpStatus.TOO_MANY_REQUESTS);
-      }
-      if (!otpRecord) throw new BadRequestException('Invalid OTP code');
-      throw new BadRequestException('OTP has expired');
+      await this.trackOtpFailure(normalizedEmail);
+      throw new BadRequestException(genericError);
     }
 
     await this.otpRepository.update(otpRecord.id, { used: true });
@@ -233,8 +262,17 @@ export class AuthService {
     const hashed_password = await bcrypt.hash(newPassword, 12);
     await this.userRepository.updatePassword(user.id, hashed_password);
 
-    // Revoke all refresh tokens (force re-login after password change)
     await this.refreshTokenRepository.revokeAllForUser(user.id);
     await this.redisService.del(`session:${user.id}`);
+  }
+
+  private async trackOtpFailure(normalizedEmail: string): Promise<void> {
+    const failKey = `auth:otp:verify:fail:${normalizedEmail}`;
+    const failedAttempts = await this.incrementRateLimitCounter(failKey, this.OTP_VERIFY_WINDOW_SECONDS);
+    if (failedAttempts >= this.OTP_VERIFY_MAX_FAILED_ATTEMPTS) {
+      await this.redisService.set(`auth:otp:lock:${normalizedEmail}`, '1', this.OTP_LOCK_SECONDS);
+      await this.redisService.del(failKey);
+      throw new HttpException('Too many invalid OTP attempts. Please try again later.', HttpStatus.TOO_MANY_REQUESTS);
+    }
   }
 }

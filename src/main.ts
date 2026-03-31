@@ -5,7 +5,26 @@ import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import helmet from 'helmet';
 
+const WEAK_SECRETS = new Set([
+  'secret', 'jwt_secret', 'changeme', 'password', 'test', 'development',
+  'your-secret-key', 'supersecret', 'mysecret',
+]);
+
+function validateStartupSecrets(): void {
+  const env = process.env.NODE_ENV ?? 'development';
+  if (env === 'development' || env === 'test') return;
+
+  const jwtSecret = process.env.JWT_SECRET ?? '';
+  if (!jwtSecret || jwtSecret.length < 32 || WEAK_SECRETS.has(jwtSecret.toLowerCase())) {
+    throw new Error(
+      `[SECURITY] JWT_SECRET is missing, too short (<32 chars), or a known weak value. ` +
+      `Refusing to start in ${env} environment.`,
+    );
+  }
+}
+
 async function bootstrap(): Promise<void> {
+  validateStartupSecrets();
   const app = await NestFactory.create(AppModule, { rawBody: true });
   const isProduction = process.env.NODE_ENV === 'production';
 
@@ -54,7 +73,7 @@ async function bootstrap(): Promise<void> {
     .addTag('Health', 'System health and observability')
     .build();
 
-  if (!isProduction || process.env.ENABLE_SWAGGER === 'true') {
+  if (process.env.ENABLE_SWAGGER === 'true') {
     const document = SwaggerModule.createDocument(app, config);
     SwaggerModule.setup('api/docs', app, document, {
       swaggerOptions: {

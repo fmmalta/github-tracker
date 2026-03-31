@@ -52,8 +52,19 @@ export class DataService {
     private readonly reviewRepo: TypeOrmRepository<Review>,
   ) {}
 
-  async getOrgs(): Promise<{ id: string; login: string; name: string | null }[]> {
-    const orgs = await this.orgRepo.find({ where: { is_active: true }, order: { login: 'ASC' } });
+  async getOrgs(userId?: string, userRole?: string): Promise<{ id: string; login: string; name: string | null }[]> {
+    if (!userRole || userRole === 'admin') {
+      const orgs = await this.orgRepo.find({ where: { is_active: true }, order: { login: 'ASC' } });
+      return orgs.map(o => ({ id: o.id, login: o.login, name: o.name }));
+    }
+
+    const orgs = await this.orgRepo
+      .createQueryBuilder('org')
+      .innerJoin('user_org_assignments', 'uoa', 'uoa.org_id = org.id AND uoa.user_id = :userId', { userId })
+      .where('org.is_active = true')
+      .orderBy('org.login', 'ASC')
+      .getMany();
+
     return orgs.map(o => ({ id: o.id, login: o.login, name: o.name }));
   }
 
