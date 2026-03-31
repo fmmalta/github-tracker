@@ -18,6 +18,7 @@ import { GithubAppController } from './controllers/github-app.controller';
 import { WebhookProcessor } from './processors/webhook.processor';
 import { BackfillProcessor } from './processors/backfill.processor';
 import { WEBHOOK_QUEUE, BACKFILL_QUEUE } from '../queue/queue.service';
+import { MetricsModule } from '../metrics/metrics.module';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { WEBHOOK_QUEUE, BACKFILL_QUEUE } from '../queue/queue.service';
       { name: WEBHOOK_QUEUE },
       { name: BACKFILL_QUEUE },
     ),
+    MetricsModule,
   ],
   controllers: [WebhookController, GithubAppController],
   providers: [
