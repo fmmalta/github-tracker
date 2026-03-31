@@ -74,11 +74,12 @@ export class AggregationService {
     const reviewsSubmitted: Array<{
       reviewer_id: string; repository_id: string; org_id: string; cnt: string;
     }> = await this.dataSource.query(`
-      SELECT reviewer_id, repository_id, org_id, COUNT(*) as cnt
-      FROM reviews
-      WHERE submitted_at_github >= $1 AND submitted_at_github <= $2
-        AND reviewer_id IS NOT NULL
-      GROUP BY reviewer_id, repository_id, org_id
+      SELECT r.reviewer_id, pr.repository_id, r.org_id, COUNT(*) as cnt
+      FROM reviews r
+      JOIN pull_requests pr ON pr.id = r.pull_request_id
+      WHERE r.submitted_at_github >= $1 AND r.submitted_at_github <= $2
+        AND r.reviewer_id IS NOT NULL
+      GROUP BY r.reviewer_id, pr.repository_id, r.org_id
     `, [dayStart, dayEnd]);
 
     for (const r of reviewsSubmitted) {
@@ -169,10 +170,11 @@ export class AggregationService {
 
     // reviews_submitted_total
     const reviewsTotals: Array<{ repository_id: string; org_id: string; cnt: string }> = await this.dataSource.query(`
-      SELECT repository_id, org_id, COUNT(*) as cnt
-      FROM reviews
-      WHERE submitted_at_github >= $1 AND submitted_at_github <= $2
-      GROUP BY repository_id, org_id
+      SELECT pr.repository_id, r.org_id, COUNT(*) as cnt
+      FROM reviews r
+      JOIN pull_requests pr ON pr.id = r.pull_request_id
+      WHERE r.submitted_at_github >= $1 AND r.submitted_at_github <= $2
+      GROUP BY pr.repository_id, r.org_id
     `, [dayStart, dayEnd]);
     for (const r of reviewsTotals) {
       rows.push({ metricDate, orgId: r.org_id, repoId: r.repository_id, developerId: null, branch: null, metricKey: MetricKey.REVIEWS_SUBMITTED_TOTAL, metricValue: Number(r.cnt) });

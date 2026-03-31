@@ -1,12 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 // Protected path prefixes
-const PROTECTED = ['/dashboard', '/repos', '/leaderboard', '/pull-requests', '/developers']
+const PROTECTED = ['/', '/repos', '/leaderboard', '/pull-requests', '/developers', '/admin']
+const PUBLIC = ['/auth', '/_next', '/favicon']
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  const isProtected = PROTECTED.some(prefix => pathname.startsWith(prefix))
+  const isPublic = PUBLIC.some(prefix => pathname.startsWith(prefix))
+  if (isPublic) return NextResponse.next()
+
+  const isProtected = PROTECTED.some(prefix => pathname === prefix || (prefix !== '/' && pathname.startsWith(prefix)))
   if (!isProtected) return NextResponse.next()
 
   // Note: access token is in localStorage (client-side only).
@@ -14,12 +18,12 @@ export function middleware(request: NextRequest) {
   // If no auth cookie, redirect to login.
   const hasAuthCookie = request.cookies.has('auth_present')
   if (!hasAuthCookie) {
-    return NextResponse.redirect(new URL('/login', request.url))
+    return NextResponse.redirect(new URL('/auth/login', request.url))
   }
 
   return NextResponse.next()
 }
 
 export const config = {
-  matcher: ['/dashboard/:path*', '/repos/:path*', '/leaderboard/:path*', '/pull-requests/:path*', '/developers/:path*'],
+  matcher: ['/((?!_next|favicon|auth).*)'],
 }

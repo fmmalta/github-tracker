@@ -33,7 +33,7 @@ export class AuthService {
     const secret = this.configService.getOrThrow<string>('JWT_SECRET');
     const accessToken = this.jwtService.sign(
       { sub: userId, email, role },
-      { secret, expiresIn: '15m' },
+      { secret, expiresIn: '7d' },
     );
     const refreshToken = crypto.randomBytes(64).toString('hex'); // opaque token
     return { accessToken, refreshToken };

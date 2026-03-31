@@ -113,8 +113,9 @@ export class DataService {
     return result;
   }
 
-  async getPullRequests(orgId: string, query: PrQueryDto): Promise<PaginatedResponse<PullRequest>> {
+  async getPullRequests(orgId: string, query: PrQueryDto): Promise<PaginatedResponse<any>> {
     const qb = this.prRepo.createQueryBuilder('pr')
+      .leftJoinAndSelect('pr.repository', 'repo')
       .where('pr.org_id = :orgId', { orgId });
 
     if (query.repo_id) {
@@ -144,7 +145,13 @@ export class DataService {
       .take(query.limit ?? 50)
       .getMany();
 
-    return { data, total, limit: query.limit ?? 50, offset: query.offset ?? 0 };
+    // Map to include repository_name for frontend
+    const mappedData = data.map(pr => ({
+      ...pr,
+      repository_name: pr.repository?.name ?? pr.repository_id,
+    }));
+
+    return { data: mappedData, total, limit: query.limit ?? 50, offset: query.offset ?? 0 };
   }
 
   async getSyncHistory(query: AdminQueryDto): Promise<{ data: SyncJob[]; total: number }> {

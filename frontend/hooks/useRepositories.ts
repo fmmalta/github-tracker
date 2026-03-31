@@ -7,7 +7,7 @@ export function useRepositories(orgId: string, limit = 100) {
     queryKey: ['repositories', orgId, limit],
     queryFn: () =>
       apiGet<PaginatedResponse<Repository>>(
-        `/api/v1/data/repositories?org_id=${orgId}&limit=${limit}&sort_by=name&sort_dir=ASC`
+        `/api/v1/orgs/${orgId}/repos?limit=${limit}&sort_by=name&sort_dir=ASC`
       ),
     enabled: !!orgId,
   })

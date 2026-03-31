@@ -42,7 +42,7 @@ export function usePullRequests(orgId: string, options: PullRequestsOptions = {}
     queryKey: ['pull-requests', orgId, start, end, repoId, developerId, state, branch, page, sortBy, sortDir],
     queryFn: () =>
       apiGet<PaginatedResponse<PullRequest>>(
-        `/api/v1/data/pull-requests?${params.toString()}`
+        `/api/v1/pull-requests?${params.toString()}`
       ),
     enabled: !!orgId,
     placeholderData: (previousData) => previousData, // Keep previous page visible during transition

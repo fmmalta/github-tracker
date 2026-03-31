@@ -16,6 +16,10 @@ export function setTokens(accessToken: string, refreshToken?: string): void {
 export function clearTokens(): void {
   localStorage.removeItem('accessToken')
   localStorage.removeItem('refreshToken')
+  // Clear auth cookie
+  if (typeof document !== 'undefined') {
+    document.cookie = 'auth_present=; path=/; max-age=0'
+  }
 }
 
 export async function refreshAccessToken(): Promise<string | null> {

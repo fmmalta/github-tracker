@@ -1,6 +1,7 @@
-import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Param, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiParam, ApiQuery, ApiResponse } from '@nestjs/swagger';
 import { MetricsService } from './metrics.service';
+import { AggregationService } from './aggregation.service';
 import { MetricsQueryDto } from './dto/metrics-query.dto';
 import { Roles, Public } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -11,7 +12,10 @@ import { AuthenticatedUser } from '../auth/strategies/jwt.strategy';
 @ApiBearerAuth('access-token')
 @Controller('api/v1')
 export class MetricsController {
-  constructor(private readonly metricsService: MetricsService) {}
+  constructor(
+    private readonly metricsService: MetricsService,
+    private readonly aggregationService: AggregationService,
+  ) {}
 
   @Get('metrics/org/:orgId')
   @Roles('admin', 'manager', 'viewer')
@@ -111,6 +115,21 @@ export class MetricsController {
   ) {
     const orgId = query.org_id ?? '';
     return this.metricsService.getTrends(orgId, query);
+  }
+
+  @Post('admin/aggregate')
+  @Roles('admin')
+  @ApiOperation({ summary: 'Backfill daily metrics aggregation for the past 90 days' })
+  @ApiResponse({ status: 201, description: 'Aggregation complete' })
+  async triggerAggregation() {
+    const today = new Date();
+    const days = 90;
+    for (let i = 1; i <= days; i++) {
+      const date = new Date(today);
+      date.setUTCDate(today.getUTCDate() - i);
+      await this.aggregationService.computeDailyMetrics(date);
+    }
+    return { status: 'ok', days_aggregated: days };
   }
 
   @Public()

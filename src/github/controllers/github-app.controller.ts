@@ -1,5 +1,5 @@
 import {
-  Controller, Post, Body, HttpCode, HttpStatus, Logger,
+  Controller, Post, Body, HttpCode, HttpStatus, Logger, BadRequestException,
 } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
@@ -9,6 +9,7 @@ import { IsNumber, IsString, Min } from 'class-validator';
 import { Organization } from '../entities/organization.entity';
 import { SyncJob } from '../entities/sync-job.entity';
 import { BACKFILL_QUEUE, BACKFILL_JOB } from '../../queue/queue.service';
+import { AggregationService } from '../../metrics/aggregation.service';
 
 class ConnectOrganizationDto {
   @IsNumber()
@@ -33,6 +34,7 @@ export class GithubAppController {
     private readonly orgRepo: TypeOrmRepo<Organization>,
     @InjectRepository(SyncJob)
     private readonly syncJobRepo: TypeOrmRepo<SyncJob>,
+    private readonly aggregationService: AggregationService,
   ) {}
 
   @Post('connect')
@@ -90,5 +92,55 @@ export class GithubAppController {
       orgLogin,
       syncJobId: syncJob.id,
     };
+  }
+
+  @Post('sync')
+  @HttpCode(HttpStatus.ACCEPTED)
+  async triggerSync(@Body() body: { org_id?: string }): Promise<object> {
+    const { org_id } = body;
+
+    const org = org_id
+      ? await this.orgRepo.findOne({ where: { id: org_id, is_active: true } })
+      : await this.orgRepo.findOne({ where: { is_active: true }, order: { created_at: 'ASC' } });
+
+    if (!org) throw new BadRequestException('No active organization found');
+
+    const syncJob = this.syncJobRepo.create({
+      type: 'manual',
+      status: 'pending',
+      org_login: org.login,
+      org_id: org.id,
+    });
+    await this.syncJobRepo.save(syncJob);
+
+    await this.backfillQueue.add(BACKFILL_JOB, {
+      installationId: Number(org.installation_id) || 0,
+      orgLogin: org.login,
+      orgId: org.id,
+      syncJobId: syncJob.id,
+    });
+
+    this.logger.log(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      severity: 'INFO',
+      message: 'manual_sync_triggered',
+      org_login: org.login,
+      sync_job_id: syncJob.id,
+    }));
+
+    // Trigger aggregation in background (don't await, let it run after sync completes)
+    // Schedule it to run in 30 seconds to allow sync to complete
+    setTimeout(async () => {
+      try {
+        const yesterday = new Date();
+        yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+        await this.aggregationService.computeDailyMetrics(yesterday);
+        this.logger.log(`Metrics aggregation triggered for ${yesterday.toISOString().split('T')[0]} after manual sync`);
+      } catch (err) {
+        this.logger.error(`Failed to trigger aggregation: ${(err as Error).message}`);
+      }
+    }, 30000);
+
+    return { status: 'sync_queued', orgLogin: org.login, syncJobId: syncJob.id };
   }
 }

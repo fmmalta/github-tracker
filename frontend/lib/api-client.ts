@@ -34,7 +34,7 @@ export async function apiCall(
       // Refresh failed — redirect to login
       if (typeof window !== 'undefined') {
         clearTokens()
-        window.location.href = '/login'
+        window.location.href = '/auth/login'
       }
       throw new ApiError(401, 'Session expired')
     }

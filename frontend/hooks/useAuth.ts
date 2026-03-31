@@ -28,7 +28,7 @@ export function useAuth() {
 
   const logout = () => {
     clearTokens()
-    router.push('/login')
+    router.push('/auth/login')
   }
 
   return { user, loading, logout, isAdmin: user?.role === 'admin' }

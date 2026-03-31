@@ -18,7 +18,7 @@ export function useFilterParams() {
   const [state, setState] = useQueryState('state', parseAsString)
   const [branch, setBranch] = useQueryState('branch', parseAsString)
   const [page, setPage] = useQueryState('page', parseAsString.withDefault('0'))
-  const [metric, setMetric] = useQueryState('metric', parseAsString.withDefault('PRS_MERGED_TOTAL'))
+  const [metric, setMetric] = useQueryState('metric', parseAsString.withDefault('prs_merged'))
 
   const setPreset = (days: number) => {
     setStartDate(new Date(Date.now() - days * 24 * 60 * 60 * 1000))

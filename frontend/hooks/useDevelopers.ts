@@ -7,7 +7,7 @@ export function useDevelopers(orgId: string, limit = 200) {
     queryKey: ['developers', orgId, limit],
     queryFn: () =>
       apiGet<PaginatedResponse<Developer>>(
-        `/api/v1/data/developers?org_id=${orgId}&limit=${limit}&sort_by=login&sort_dir=ASC`
+        `/api/v1/orgs/${orgId}/developers?limit=${limit}&sort_by=login&sort_dir=ASC`
       ),
     enabled: !!orgId,
   })

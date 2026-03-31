@@ -16,6 +16,7 @@ import { useFirstOrgId } from '@/hooks/useOrgs'
 import { useDeveloperTrends } from '@/hooks/useDeveloperTrends'
 import { useDeveloperReviews } from '@/hooks/useDeveloperReviews'
 import { METRIC_NEUTRAL_DISCLAIMER, DEFAULT_PAGE_SIZE } from '@/lib/constants'
+import { formatHoursToFriendly } from '@/lib/utils'
 import type { AggregatedMetric, PullRequestState } from '@/lib/types'
 
 const FEATURED_DEV_METRICS = [
@@ -91,15 +92,21 @@ export default function DeveloperDetailPage() {
           <MetricGridSkeleton count={4} />
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-            {featuredMetrics.map((metric) => (
-              <MetricCard
-                key={metric.metric_key}
-                label={metric.definition.name}
-                value={metric.total}
-                unit={metric.definition.unit !== 'count' ? metric.definition.unit : undefined}
-                definition={metric.definition}
-              />
-            ))}
+            {featuredMetrics.map((metric) => {
+              const isAvgTimeToMerge = metric.metric_key === 'avg_time_to_merge_hours'
+              const displayValue = isAvgTimeToMerge ? formatHoursToFriendly(metric.total) : metric.total
+              const displayUnit = isAvgTimeToMerge ? undefined : (metric.definition.unit !== 'count' ? metric.definition.unit : undefined)
+
+              return (
+                <MetricCard
+                  key={metric.metric_key}
+                  label={metric.definition.name}
+                  value={displayValue}
+                  unit={displayUnit}
+                  definition={metric.definition}
+                />
+              )
+            })}
           </div>
         )}
 
@@ -122,7 +129,57 @@ export default function DeveloperDetailPage() {
         </div>
 
         {activeTab === 'overview' && (
-          <DeveloperTrendChart data={trendPoints} loading={trendsLoading} />
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+              <div>
+                <h3 className="text-sm font-semibold text-foreground mb-4">Activity Overview</h3>
+                <div className="space-y-3">
+                  <div className="border border-border rounded-lg p-3 bg-card/50">
+                    <p className="text-xs text-muted-foreground mb-1">Total PRs Opened</p>
+                    <p className="text-2xl font-semibold text-foreground">
+                      {metricsData?.data?.find(m => m.metric_key === 'prs_opened_total')?.total ?? 0}
+                    </p>
+                  </div>
+                  <div className="border border-border rounded-lg p-3 bg-card/50">
+                    <p className="text-xs text-muted-foreground mb-1">Total PRs Merged</p>
+                    <p className="text-2xl font-semibold text-foreground">
+                      {metricsData?.data?.find(m => m.metric_key === 'prs_merged_total')?.total ?? 0}
+                    </p>
+                  </div>
+                  <div className="border border-border rounded-lg p-3 bg-card/50">
+                    <p className="text-xs text-muted-foreground mb-1">Code Reviews</p>
+                    <p className="text-2xl font-semibold text-foreground">
+                      {metricsData?.data?.find(m => m.metric_key === 'reviews_submitted_total')?.total ?? 0}
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-foreground mb-4">Impact Metrics</h3>
+                <div className="space-y-3">
+                  <div className="border border-border rounded-lg p-3 bg-card/50">
+                    <p className="text-xs text-muted-foreground mb-1">Lines Added</p>
+                    <p className="text-2xl font-semibold text-green-400">
+                      +{metricsData?.data?.find(m => m.metric_key === 'additions')?.total?.toLocaleString() ?? 0}
+                    </p>
+                  </div>
+                  <div className="border border-border rounded-lg p-3 bg-card/50">
+                    <p className="text-xs text-muted-foreground mb-1">Lines Removed</p>
+                    <p className="text-2xl font-semibold text-red-400">
+                      -{metricsData?.data?.find(m => m.metric_key === 'deletions')?.total?.toLocaleString() ?? 0}
+                    </p>
+                  </div>
+                  <div className="border border-border rounded-lg p-3 bg-card/50">
+                    <p className="text-xs text-muted-foreground mb-1">Avg PR Size</p>
+                    <p className="text-2xl font-semibold text-foreground">
+                      {metricsData?.data?.find(m => m.metric_key === 'avg_pr_size')?.total?.toFixed(0) ?? 0} files
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <DeveloperTrendChart data={trendPoints} loading={trendsLoading} />
+          </>
         )}
 
         {activeTab === 'prs' && (
@@ -153,7 +210,7 @@ export default function DeveloperDetailPage() {
                           <td className="py-2 px-3 max-w-[200px]">
                             <span className="text-xs text-foreground truncate block" title={pr.title}>{pr.title}</span>
                           </td>
-                          <td className="py-2 px-3 text-xs text-muted-foreground">{pr.repository_id}</td>
+                          <td className="py-2 px-3 text-xs text-muted-foreground">{pr.repository_name || pr.repository_id}</td>
                           <td className="py-2 px-3">
                             <span className={`text-xs border rounded px-1.5 py-0.5 ${PR_STATE_COLORS[pr.state as PullRequestState] ?? PR_STATE_COLORS.closed}`}>
                               {pr.state}

@@ -90,6 +90,7 @@ export interface PullRequest {
   author_id: string | null
   author_login: string
   repository_id: string
+  repository_name?: string
   base_branch: string
   additions: number
   deletions: number
