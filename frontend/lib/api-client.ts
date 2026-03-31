@@ -17,6 +17,7 @@ export async function apiCall(
   const makeRequest = (authToken: string | null) =>
     fetch(`${baseUrl}${endpoint}`, {
       ...options,
+      credentials: 'include',
       headers: {
         'Content-Type': 'application/json',
         ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),

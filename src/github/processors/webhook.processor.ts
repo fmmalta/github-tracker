@@ -7,6 +7,8 @@ import { WebhookDelivery } from '../entities/webhook-delivery.entity';
 import { PullRequest } from '../entities/pull-request.entity';
 import { Developer } from '../entities/developer.entity';
 import { Review } from '../entities/review.entity';
+import { Repository as RepoEntity } from '../entities/repository.entity';
+import { Deployment } from '../entities/deployment.entity';
 import { WEBHOOK_QUEUE } from '../../queue/queue.service';
 
 interface GitHubPrPayload {
@@ -34,6 +36,36 @@ interface GitHubReviewPayload {
   user: { id: number; login: string };
 }
 
+interface GitHubRepositoryPayload {
+  id: number;
+}
+
+interface GitHubDeploymentPayload {
+  id: number;
+  environment?: string | null;
+  sha?: string | null;
+  ref?: string | null;
+  task?: string | null;
+  created_at?: string;
+}
+
+interface GitHubDeploymentStatusPayload {
+  state: string;
+  created_at?: string;
+  updated_at?: string;
+  deployment?: { id: number };
+}
+
+const DEPLOYMENT_STATUS_STATES = new Set([
+  'error',
+  'failure',
+  'inactive',
+  'in_progress',
+  'pending',
+  'queued',
+  'success',
+]);
+
 @Processor(WEBHOOK_QUEUE)
 export class WebhookProcessor extends WorkerHost {
   private readonly logger = new Logger(WebhookProcessor.name);
@@ -47,6 +79,10 @@ export class WebhookProcessor extends WorkerHost {
     private readonly developerRepo: TypeOrmRepo<Developer>,
     @InjectRepository(Review)
     private readonly reviewRepo: TypeOrmRepo<Review>,
+    @InjectRepository(RepoEntity)
+    private readonly repoRepo: TypeOrmRepo<RepoEntity>,
+    @InjectRepository(Deployment)
+    private readonly deploymentRepo: TypeOrmRepo<Deployment>,
   ) {
     super();
   }
@@ -77,6 +113,10 @@ export class WebhookProcessor extends WorkerHost {
         await this.processPullRequestEvent(payload, orgId);
       } else if (eventType === 'pull_request_review') {
         await this.processPullRequestReviewEvent(payload, orgId);
+      } else if (eventType === 'deployment') {
+        await this.processDeploymentEvent(payload, orgId);
+      } else if (eventType === 'deployment_status') {
+        await this.processDeploymentStatusEvent(payload, orgId);
       } else {
         this.logger.log(
           JSON.stringify({
@@ -139,7 +179,14 @@ export class WebhookProcessor extends WorkerHost {
     orgId: string | null,
   ): Promise<void> {
     const pr = payload['pull_request'] as GitHubPrPayload;
+    const repo = payload['repository'] as GitHubRepositoryPayload | undefined;
     const author = pr.user;
+    const repository = await this.resolveRepository(repo?.id);
+    const effectiveOrgId = repository?.org_id ?? orgId;
+
+    if (!repository || !effectiveOrgId) {
+      throw new Error(`Repository context missing for PR webhook (repo_github_id=${repo?.id ?? 'unknown'})`);
+    }
 
     // Upsert developer by github_id
     await this.developerRepo.upsert(
@@ -169,7 +216,8 @@ export class WebhookProcessor extends WorkerHost {
         github_merged_at: pr.merged_at ? new Date(pr.merged_at) : null,
         github_closed_at: pr.closed_at ? new Date(pr.closed_at) : null,
         author_login: author.login,
-        org_id: orgId ?? '00000000-0000-0000-0000-000000000000',
+        repository_id: repository.id,
+        org_id: effectiveOrgId,
       },
       { conflictPaths: ['github_id'] },
     );
@@ -203,5 +251,110 @@ export class WebhookProcessor extends WorkerHost {
       },
       { conflictPaths: ['github_id'] },
     );
+  }
+
+  private async processDeploymentEvent(
+    payload: Record<string, unknown>,
+    orgId: string | null,
+  ): Promise<void> {
+    const deployment = payload['deployment'] as GitHubDeploymentPayload | undefined;
+    const repo = payload['repository'] as GitHubRepositoryPayload | undefined;
+    if (!deployment?.id || !repo?.id) {
+      throw new Error('Invalid deployment webhook payload');
+    }
+
+    const repository = await this.resolveRepository(repo.id);
+    const effectiveOrgId = repository?.org_id ?? orgId;
+    if (!repository || !effectiveOrgId) {
+      throw new Error(`Repository context missing for deployment webhook (repo_github_id=${repo.id})`);
+    }
+
+    const existing = await this.deploymentRepo.findOne({ where: { github_id: deployment.id } });
+    const githubCreatedAt = deployment.created_at ? new Date(deployment.created_at) : new Date();
+
+    await this.deploymentRepo.upsert(
+      {
+        github_id: deployment.id,
+        repository_id: repository.id,
+        org_id: effectiveOrgId,
+        environment: deployment.environment ?? null,
+        sha: deployment.sha ?? null,
+        ref: deployment.ref ?? null,
+        task: deployment.task ?? null,
+        github_created_at: githubCreatedAt,
+        latest_status_state: existing?.latest_status_state ?? null,
+        latest_status_at: existing?.latest_status_at ?? null,
+        status_payload_json: (existing?.status_payload_json ?? null) as any,
+      },
+      { conflictPaths: ['github_id'] },
+    );
+  }
+
+  private async processDeploymentStatusEvent(
+    payload: Record<string, unknown>,
+    orgId: string | null,
+  ): Promise<void> {
+    const status = payload['deployment_status'] as GitHubDeploymentStatusPayload | undefined;
+    const deployment = payload['deployment'] as GitHubDeploymentPayload | undefined;
+    const repo = payload['repository'] as GitHubRepositoryPayload | undefined;
+    const deploymentGithubId = status?.deployment?.id ?? deployment?.id;
+
+    if (!deploymentGithubId || !repo?.id || !status?.state) {
+      throw new Error('Invalid deployment_status webhook payload');
+    }
+
+    const repository = await this.resolveRepository(repo.id);
+    const effectiveOrgId = repository?.org_id ?? orgId;
+    if (!repository || !effectiveOrgId) {
+      throw new Error(`Repository context missing for deployment_status webhook (repo_github_id=${repo.id})`);
+    }
+
+    const statusAtRaw = status.created_at ?? status.updated_at;
+    const statusAt = statusAtRaw ? new Date(statusAtRaw) : new Date();
+    const existing = await this.deploymentRepo.findOne({ where: { github_id: deploymentGithubId } });
+
+    if (existing) {
+      const shouldUpdate =
+        !existing.latest_status_at || statusAt.getTime() >= existing.latest_status_at.getTime();
+
+      if (!shouldUpdate) return;
+
+      existing.repository_id = repository.id;
+      existing.org_id = effectiveOrgId;
+      existing.latest_status_state = this.normalizeDeploymentStatusState(status.state);
+      existing.latest_status_at = statusAt;
+      existing.status_payload_json = status as unknown as Record<string, unknown>;
+      await this.deploymentRepo.save(existing);
+      return;
+    }
+
+    await this.deploymentRepo.upsert(
+      {
+        github_id: deploymentGithubId,
+        repository_id: repository.id,
+        org_id: effectiveOrgId,
+        environment: deployment?.environment ?? null,
+        sha: deployment?.sha ?? null,
+        ref: deployment?.ref ?? null,
+        task: deployment?.task ?? null,
+        github_created_at: deployment?.created_at ? new Date(deployment.created_at) : statusAt,
+        latest_status_state: this.normalizeDeploymentStatusState(status.state),
+        latest_status_at: statusAt,
+        status_payload_json: (status as unknown as Record<string, unknown>) as any,
+      },
+      { conflictPaths: ['github_id'] },
+    );
+  }
+
+  private async resolveRepository(githubRepoId?: number): Promise<RepoEntity | null> {
+    if (!githubRepoId) return null;
+    return this.repoRepo.findOne({ where: { github_id: githubRepoId } });
+  }
+
+  private normalizeDeploymentStatusState(state: string): Deployment['latest_status_state'] {
+    const normalized = state.toLowerCase();
+    return DEPLOYMENT_STATUS_STATES.has(normalized)
+      ? normalized as Deployment['latest_status_state']
+      : null;
   }
 }

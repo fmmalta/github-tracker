@@ -8,6 +8,7 @@ import { Repository as RepoEntity } from '../entities/repository.entity';
 import { Developer } from '../entities/developer.entity';
 import { PullRequest } from '../entities/pull-request.entity';
 import { Review } from '../entities/review.entity';
+import { Deployment } from '../entities/deployment.entity';
 
 export interface BackfillProgress {
   reposSynced: number;
@@ -23,6 +24,15 @@ export interface BackfillResult {
 }
 
 type OctokitClient = Awaited<ReturnType<GitHubAppService['getOctokitForInstallation']>>;
+const DEPLOYMENT_STATUS_STATES = new Set([
+  'error',
+  'failure',
+  'inactive',
+  'in_progress',
+  'pending',
+  'queued',
+  'success',
+]);
 
 @Injectable()
 export class BackfillService {
@@ -31,6 +41,8 @@ export class BackfillService {
   private readonly MAX_REPOS_PER_ORG = 500; // Prevent infinite loops on massive orgs
   private readonly MAX_PR_PAGES = 50; // Max 5000 PRs per repo (100 per page)
   private readonly MAX_REVIEW_PAGES = 100; // Max 10000 reviews per PR (100 per page)
+  private readonly MAX_DEPLOYMENT_PAGES = 20; // Max 2000 deployments per repo (100 per page)
+  private readonly MAX_DEPLOYMENT_STATUS_PAGES = 20; // Max 2000 statuses per deployment
 
   constructor(
     private readonly githubAppService: GitHubAppService,
@@ -45,6 +57,8 @@ export class BackfillService {
     private readonly prRepo: TypeOrmRepo<PullRequest>,
     @InjectRepository(Review)
     private readonly reviewRepo: TypeOrmRepo<Review>,
+    @InjectRepository(Deployment)
+    private readonly deploymentRepo: TypeOrmRepo<Deployment>,
   ) {}
 
   async backfillOrganization(
@@ -73,6 +87,7 @@ export class BackfillService {
 
     let totalPrs = 0;
     let totalReviews = 0;
+    let totalDeployments = 0;
     let reposCompleted = 0;
 
     const processRepo = async (repo: (typeof repos)[number]) => {
@@ -91,7 +106,7 @@ export class BackfillService {
 
         const repoEntity = await this.repoRepo.findOneOrFail({ where: { github_id: repo.id } });
 
-        const { prsProcessed, reviewsProcessed } = await this.backfillRepository(
+        const { prsProcessed, reviewsProcessed, deploymentsProcessed } = await this.backfillRepository(
           octokit,
           orgLogin,
           repo.name,
@@ -114,6 +129,7 @@ export class BackfillService {
 
         totalPrs += prsProcessed;
         totalReviews += reviewsProcessed;
+        totalDeployments += deploymentsProcessed;
 
         this.logger.log(JSON.stringify({
           timestamp: new Date().toISOString(),
@@ -122,6 +138,7 @@ export class BackfillService {
           repo: repo.full_name,
           prs: prsProcessed,
           reviews: reviewsProcessed,
+          deployments: deploymentsProcessed,
         }));
       } catch (err) {
         // Log and skip — don't let one bad repo kill the whole sync
@@ -146,6 +163,14 @@ export class BackfillService {
     };
 
     await this.processWithConcurrency(repos, processRepo, 3);
+
+    this.logger.log(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      severity: 'INFO',
+      message: 'backfill_deployments_completed',
+      org: orgLogin,
+      deployments: totalDeployments,
+    }));
 
     return { reposSynced: repos.length, prsSynced: totalPrs, reviewsSynced: totalReviews };
   }
@@ -189,9 +214,10 @@ export class BackfillService {
     repoId: string,
     cutoffDate: Date,
     onRepoProgress?: (prsDelta: number, reviewsDelta: number) => Promise<void>,
-  ): Promise<{ prsProcessed: number; reviewsProcessed: number }> {
+  ): Promise<{ prsProcessed: number; reviewsProcessed: number; deploymentsProcessed: number }> {
     let prsProcessed = 0;
     let reviewsProcessed = 0;
+    let deploymentsProcessed = 0;
     let page = 1;
     let reachedCutoff = false;
     let prsInThisBatch = 0;
@@ -313,7 +339,128 @@ export class BackfillService {
       page++;
     }
 
-    return { prsProcessed, reviewsProcessed };
+    deploymentsProcessed = await this.backfillDeployments(
+      octokit,
+      owner,
+      repo,
+      orgId,
+      repoId,
+      cutoffDate,
+    );
+
+    return { prsProcessed, reviewsProcessed, deploymentsProcessed };
+  }
+
+  private async backfillDeployments(
+    octokit: OctokitClient,
+    owner: string,
+    repo: string,
+    orgId: string,
+    repoId: string,
+    cutoffDate: Date,
+  ): Promise<number> {
+    let deploymentsProcessed = 0;
+    let page = 1;
+    let reachedCutoff = false;
+
+    while (!reachedCutoff && page <= this.MAX_DEPLOYMENT_PAGES) {
+      const deployments = await this.rateLimitService.withRateLimitHandling(async () => {
+        const res = await octokit.rest.repos.listDeployments({
+          owner,
+          repo,
+          per_page: 100,
+          page,
+        });
+        return { data: res.data, headers: res.headers as Record<string, string> };
+      });
+
+      for (const deployment of deployments) {
+        const createdAt = new Date(deployment.created_at);
+        if (createdAt < cutoffDate) {
+          reachedCutoff = true;
+          break;
+        }
+
+        const latestStatus = await this.fetchLatestDeploymentStatus(octokit, owner, repo, deployment.id);
+
+        await this.deploymentRepo.upsert(
+          {
+            github_id: deployment.id,
+            repository_id: repoId,
+            org_id: orgId,
+            environment: deployment.environment ?? null,
+            sha: deployment.sha ?? null,
+            ref: deployment.ref ?? null,
+            task: deployment.task ?? null,
+            github_created_at: createdAt,
+            latest_status_state: this.normalizeDeploymentStatusState(latestStatus?.state ?? null),
+            latest_status_at: latestStatus?.timestamp ?? null,
+            status_payload_json: (latestStatus?.raw ?? null) as any,
+          },
+          { conflictPaths: ['github_id'] },
+        );
+
+        deploymentsProcessed++;
+      }
+
+      if (reachedCutoff || deployments.length < 100) break;
+      page++;
+    }
+
+    return deploymentsProcessed;
+  }
+
+  private async fetchLatestDeploymentStatus(
+    octokit: OctokitClient,
+    owner: string,
+    repo: string,
+    deploymentId: number,
+  ): Promise<{ state: string | null; timestamp: Date | null; raw: Record<string, unknown> | null }> {
+    let page = 1;
+    let latest: { state: string | null; timestamp: Date | null; raw: Record<string, unknown> | null } = {
+      state: null,
+      timestamp: null,
+      raw: null,
+    };
+
+    while (page <= this.MAX_DEPLOYMENT_STATUS_PAGES) {
+      const statuses = await this.rateLimitService.withRateLimitHandling(async () => {
+        const res = await octokit.rest.repos.listDeploymentStatuses({
+          owner,
+          repo,
+          deployment_id: deploymentId,
+          per_page: 100,
+          page,
+        });
+        return { data: res.data, headers: res.headers as Record<string, string> };
+      });
+
+      if (statuses.length === 0) break;
+
+      for (const status of statuses) {
+        const statusAt = new Date(status.created_at);
+        if (!latest.timestamp || statusAt.getTime() > latest.timestamp.getTime()) {
+          latest = {
+            state: status.state ?? null,
+            timestamp: statusAt,
+            raw: status as unknown as Record<string, unknown>,
+          };
+        }
+      }
+
+      if (statuses.length < 100) break;
+      page++;
+    }
+
+    return latest;
+  }
+
+  private normalizeDeploymentStatusState(state: string | null): Deployment['latest_status_state'] {
+    if (!state) return null;
+    const normalized = state.toLowerCase();
+    return DEPLOYMENT_STATUS_STATES.has(normalized)
+      ? normalized as Deployment['latest_status_state']
+      : null;
   }
 
   private async backfillReviews(

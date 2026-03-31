@@ -20,3 +20,38 @@ export function formatHoursToFriendly(hours: number): string {
 
   return `${days} day${days !== 1 ? 's' : ''}, ${remainingHours} hour${remainingHours !== 1 ? 's' : ''}`
 }
+
+export function formatDateTime(value: string | Date): string {
+  const date = value instanceof Date ? value : new Date(value)
+  if (Number.isNaN(date.getTime())) return '—'
+
+  return date.toLocaleString(undefined, {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  })
+}
+
+export function formatRelativeTime(value: string | Date): string {
+  const date = value instanceof Date ? value : new Date(value)
+  if (Number.isNaN(date.getTime())) return '—'
+
+  const now = Date.now()
+  const diffMs = date.getTime() - now
+  const absMs = Math.abs(diffMs)
+  const minute = 60 * 1000
+  const hour = 60 * minute
+  const day = 24 * hour
+  const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' })
+
+  if (absMs < minute) {
+    return 'just now'
+  }
+  if (absMs < hour) {
+    return rtf.format(Math.round(diffMs / minute), 'minute')
+  }
+  if (absMs < day) {
+    return rtf.format(Math.round(diffMs / hour), 'hour')
+  }
+
+  return rtf.format(Math.round(diffMs / day), 'day')
+}

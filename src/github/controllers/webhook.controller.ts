@@ -24,7 +24,18 @@ export class WebhookController {
     const eventType = req.headers['x-github-event'] as string | undefined;
 
     // 1. Verify HMAC-SHA256 signature — reject spoofed payloads
-    const secret = this.configService.get<string>('GITHUB_WEBHOOK_SECRET', '');
+    const secret = this.configService.get<string>('GITHUB_WEBHOOK_SECRET');
+    if (!secret || secret.trim().length === 0) {
+      this.logger.error(
+        JSON.stringify({
+          timestamp: new Date().toISOString(),
+          severity: 'ERROR',
+          message: 'webhook_secret_missing',
+        }),
+      );
+      res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({ error: 'Webhook secret is not configured' });
+      return;
+    }
     const rawBody = (req as Request & { rawBody?: Buffer }).rawBody ?? Buffer.from(JSON.stringify(req.body));
 
     if (!signature || !this.webhookService.verifySignature(rawBody, signature, secret)) {

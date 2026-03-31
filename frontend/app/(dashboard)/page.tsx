@@ -10,6 +10,7 @@ import { useTrends } from '@/hooks/useTrends'
 import { useHealth } from '@/hooks/useHealth'
 import { useFirstOrgId } from '@/hooks/useOrgs'
 import type { AggregatedMetric } from '@/lib/types'
+import { formatHoursToFriendly } from '@/lib/utils'
 
 const FEATURED_METRICS: string[] = [
   'prs_opened_total',
@@ -17,6 +18,7 @@ const FEATURED_METRICS: string[] = [
   'avg_time_to_merge_hours',
   'reviews_submitted_total',
   'prs_failed_ci_total',
+  'failed_deploys_total',
   'deploys_total',
   'commits_total',
 ]
@@ -27,9 +29,27 @@ export default function OrgOverviewPage() {
   const { data: trendsData, isLoading: trendsLoading } = useTrends(orgId)
   const { data: health, isLoading: healthLoading } = useHealth()
 
-  const featuredMetrics: AggregatedMetric[] = (metricsData?.data ?? []).filter(
-    (m) => FEATURED_METRICS.includes(m.metric_key)
-  )
+  const featuredMetrics: AggregatedMetric[] = FEATURED_METRICS.map((metricKey) => {
+    const existing = (metricsData?.data ?? []).find((m) => m.metric_key === metricKey)
+    if (existing) return existing
+
+    const defs = (metricsData?.definitions ?? []) as unknown
+    const fallbackDefinition = Array.isArray(defs)
+      ? defs.find((d: { key: string }) => d.key === metricKey)
+      : (defs as Record<string, unknown>)[metricKey]
+
+    return {
+      metric_key: metricKey as AggregatedMetric['metric_key'],
+      total: 0,
+      definition: (fallbackDefinition ?? {
+        key: metricKey,
+        name: metricKey,
+        formula: 'No data yet for selected period.',
+        unit: 'count',
+        disclaimer: 'Metric appears as zero until deployment data is ingested and aggregated.',
+      }) as AggregatedMetric['definition'],
+    }
+  })
 
   return (
     <>
@@ -51,8 +71,12 @@ export default function OrgOverviewPage() {
               <MetricCard
                 key={metric.metric_key}
                 label={metric.definition.name}
-                value={metric.total}
-                unit={metric.definition.unit !== 'count' ? metric.definition.unit : undefined}
+                value={metric.metric_key === 'avg_time_to_merge_hours'
+                  ? formatHoursToFriendly(metric.total)
+                  : metric.total}
+                unit={metric.metric_key === 'avg_time_to_merge_hours'
+                  ? undefined
+                  : (metric.definition.unit !== 'count' ? metric.definition.unit : undefined)}
                 definition={metric.definition}
               />
             ))}

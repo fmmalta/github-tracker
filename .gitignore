@@ -1,6 +1,8 @@
 node_modules/
 dist/
 coverage/
+frontend/.next/
 .env
 .env.local
 *.js.map
+.omc/*

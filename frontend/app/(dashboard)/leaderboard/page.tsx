@@ -7,6 +7,7 @@ import { TableSkeleton } from '@/components/dashboard/LoadingSkeletons'
 import { useLeaderboard } from '@/hooks/useLeaderboard'
 import { useFilterParams } from '@/hooks/useFilterParams'
 import { useFirstOrgId } from '@/hooks/useOrgs'
+import { formatHoursToFriendly } from '@/lib/utils'
 import { LEADERBOARD_DISCLAIMER } from '@/lib/constants'
 import type { MetricKey } from '@/lib/types'
 
@@ -99,7 +100,10 @@ export default function LeaderboardPage() {
                     </td>
                     <td className="py-2 px-4 text-right">
                       <span className={`text-sm ${entry.rank <= 3 ? 'font-bold text-foreground' : 'font-normal text-foreground'}`}>
-                        {typeof entry.total === 'number' ? entry.total.toLocaleString() : entry.total}
+                        {currentMetric === 'avg_time_to_merge_hours' && typeof entry.total === 'number'
+                          ? formatHoursToFriendly(entry.total)
+                          : (typeof entry.total === 'number' ? entry.total.toLocaleString() : entry.total)
+                        }
                       </span>
                     </td>
                   </tr>

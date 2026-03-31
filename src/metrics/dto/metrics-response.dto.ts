@@ -128,6 +128,20 @@ export const METRIC_DEFINITIONS: Record<MetricKey, MetricDefinition> = {
     unit: 'count',
     disclaimer: 'Organization-level deploy proxy. See per-repository breakdown for individual repo deploy frequency.',
   },
+  [MetricKey.FAILED_DEPLOYS]: {
+    key: MetricKey.FAILED_DEPLOYS,
+    name: 'Failed Deploys',
+    formula: 'COUNT of deployments whose latest status is failure or error, grouped by repository',
+    unit: 'count',
+    disclaimer: 'Tracks failed deployments from GitHub deployment statuses across all environments. Requires your CI/CD pipeline to report deployment status back to GitHub.',
+  },
+  [MetricKey.FAILED_DEPLOYS_TOTAL]: {
+    key: MetricKey.FAILED_DEPLOYS_TOTAL,
+    name: 'Total Failed Deploys (Organization)',
+    formula: 'COUNT of deployments whose latest status is failure or error across all repositories',
+    unit: 'count',
+    disclaimer: 'Organization-level failed deployment count from GitHub deployment statuses across all environments.',
+  },
   [MetricKey.COMMITS]: {
     key: MetricKey.COMMITS,
     name: 'Commits',

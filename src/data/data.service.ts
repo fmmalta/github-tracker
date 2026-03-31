@@ -19,6 +19,7 @@ export interface DeveloperReviewDto {
   pr_number: number;
   pr_html_url: string | null;
   repo_name: string;
+  base_branch: string;
   state: 'approved' | 'changes_requested' | 'commented' | 'dismissed';
   date_reviewed: string;
 }
@@ -214,6 +215,7 @@ export class DataService {
         pr_number: pr?.number ?? 0,
         pr_html_url: prHtmlUrl,
         repo_name: repo?.name ?? '(unknown)',
+        base_branch: pr?.base_branch ?? 'unknown',
         state: r.state.toLowerCase() as 'approved' | 'changes_requested' | 'commented' | 'dismissed',
         date_reviewed: r.submitted_at_github.toISOString(),
       };

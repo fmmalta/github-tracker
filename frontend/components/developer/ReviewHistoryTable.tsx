@@ -60,7 +60,7 @@ export function ReviewHistoryTable({ reviews, isLoading, isError }: ReviewHistor
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-border">
-            {['PR Title', 'Repo', 'Review State', 'Date Reviewed'].map((h) => (
+            {['PR Title', 'Repo', 'Branch', 'Review State', 'Date Reviewed'].map((h) => (
               <th key={h} className="text-left text-xs text-muted-foreground font-medium py-2 px-3">
                 {h}
               </th>
@@ -79,6 +79,7 @@ export function ReviewHistoryTable({ reviews, isLoading, isError }: ReviewHistor
                 </span>
               </td>
               <td className="py-2 px-3 text-xs text-muted-foreground">{review.repo_name}</td>
+              <td className="py-2 px-3 text-xs text-muted-foreground">{review.base_branch}</td>
               <td className="py-2 px-3"><ReviewStateBadge state={review.state} /></td>
               <td className="py-2 px-3 text-xs text-foreground">{formatDate(review.date_reviewed)}</td>
             </tr>

@@ -1,21 +1,25 @@
+let inMemoryAccessToken: string | null = null
+
 export function getAccessToken(): string | null {
+  if (inMemoryAccessToken) return inMemoryAccessToken
   if (typeof window === 'undefined') return null
-  return localStorage.getItem('accessToken')
+  const token = sessionStorage.getItem('accessToken')
+  inMemoryAccessToken = token
+  return token
 }
 
-export function getRefreshToken(): string | null {
-  if (typeof window === 'undefined') return null
-  return localStorage.getItem('refreshToken')
-}
-
-export function setTokens(accessToken: string, refreshToken?: string): void {
-  localStorage.setItem('accessToken', accessToken)
-  if (refreshToken) localStorage.setItem('refreshToken', refreshToken)
+export function setAccessToken(accessToken: string): void {
+  inMemoryAccessToken = accessToken
+  if (typeof window !== 'undefined') {
+    sessionStorage.setItem('accessToken', accessToken)
+  }
 }
 
 export function clearTokens(): void {
-  localStorage.removeItem('accessToken')
-  localStorage.removeItem('refreshToken')
+  inMemoryAccessToken = null
+  if (typeof window !== 'undefined') {
+    sessionStorage.removeItem('accessToken')
+  }
   // Clear auth cookie
   if (typeof document !== 'undefined') {
     document.cookie = 'auth_present=; path=/; max-age=0'
@@ -23,20 +27,19 @@ export function clearTokens(): void {
 }
 
 export async function refreshAccessToken(): Promise<string | null> {
-  const refreshToken = getRefreshToken()
-  if (!refreshToken) return null
   try {
     const res = await fetch('/api/v1/auth/refresh', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refresh_token: refreshToken }),
+      credentials: 'include',
+      body: JSON.stringify({}),
     })
     if (!res.ok) {
       clearTokens()
       return null
     }
     const { accessToken } = await res.json()
-    setTokens(accessToken)
+    setAccessToken(accessToken)
     return accessToken
   } catch {
     return null

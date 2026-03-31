@@ -23,6 +23,8 @@ export enum MetricKey {
   // Deploy proxy — PRs merged to default branch (main/master/production/prod)
   DEPLOYS = 'deploys',              // per-repo deploy count
   DEPLOYS_TOTAL = 'deploys_total',  // org-level total deploys (no repo_id)
+  FAILED_DEPLOYS = 'failed_deploys',              // per-repo failed deploy count
+  FAILED_DEPLOYS_TOTAL = 'failed_deploys_total',  // org-level failed deploy count (no repo_id)
   // Commit counts
   COMMITS = 'commits',              // per developer per repo per day
   COMMITS_TOTAL = 'commits_total',  // per repo or org total (no developer_id)

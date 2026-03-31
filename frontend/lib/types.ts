@@ -17,6 +17,8 @@ export type MetricKey =
   | 'prs_failed_ci_total'
   | 'deploys'
   | 'deploys_total'
+  | 'failed_deploys'
+  | 'failed_deploys_total'
   | 'commits'
   | 'commits_total'
 

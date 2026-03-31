@@ -10,6 +10,7 @@ import { Organization } from '../entities/organization.entity';
 import { SyncJob } from '../entities/sync-job.entity';
 import { BACKFILL_QUEUE, BACKFILL_JOB } from '../../queue/queue.service';
 import { AggregationService } from '../../metrics/aggregation.service';
+import { Roles } from '../../auth/decorators/roles.decorator';
 
 class ConnectOrganizationDto {
   @IsNumber()
@@ -38,6 +39,7 @@ export class GithubAppController {
   ) {}
 
   @Post('connect')
+  @Roles('admin')
   @HttpCode(HttpStatus.ACCEPTED)
   async connectOrganization(@Body() dto: ConnectOrganizationDto): Promise<object> {
     const { installationId, orgLogin, githubOrgId } = dto;
@@ -95,6 +97,7 @@ export class GithubAppController {
   }
 
   @Post('sync')
+  @Roles('admin')
   @HttpCode(HttpStatus.ACCEPTED)
   async triggerSync(@Body() body: { org_id?: string }): Promise<object> {
     const { org_id } = body;

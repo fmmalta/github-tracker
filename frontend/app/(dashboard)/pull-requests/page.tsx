@@ -9,6 +9,7 @@ import { useDevelopers } from '@/hooks/useDevelopers'
 import { useFilterParams } from '@/hooks/useFilterParams'
 import { useFirstOrgId } from '@/hooks/useOrgs'
 import { DEFAULT_PAGE_SIZE } from '@/lib/constants'
+import { formatDateTime } from '@/lib/utils'
 import type { PullRequestState } from '@/lib/types'
 
 const STATE_COLORS: Record<PullRequestState, string> = {
@@ -139,7 +140,7 @@ export default function PullRequestsPage() {
                         </span>
                       </td>
                       <td className="py-2 px-3 text-xs text-muted-foreground">
-                        {pr.github_created_at ? new Date(pr.github_created_at).toLocaleDateString() : '—'}
+                        {pr.github_created_at ? formatDateTime(pr.github_created_at) : '—'}
                       </td>
                       <td className="py-2 px-3 text-xs text-muted-foreground">
                         {pr.github_merged_at ? new Date(pr.github_merged_at).toLocaleDateString() : '—'}

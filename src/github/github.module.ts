@@ -9,6 +9,7 @@ import { Review } from './entities/review.entity';
 import { Commit } from './entities/commit.entity';
 import { WebhookDelivery } from './entities/webhook-delivery.entity';
 import { SyncJob } from './entities/sync-job.entity';
+import { Deployment } from './entities/deployment.entity';
 import { GitHubAppService } from './services/github-app.service';
 import { RateLimitService } from './services/rate-limit.service';
 import { WebhookService } from './services/webhook.service';
@@ -24,7 +25,7 @@ import { MetricsModule } from '../metrics/metrics.module';
   imports: [
     TypeOrmModule.forFeature([
       Organization, Repository, Developer, PullRequest,
-      Review, Commit, WebhookDelivery, SyncJob,
+      Review, Commit, WebhookDelivery, SyncJob, Deployment,
     ]),
     BullModule.registerQueue(
       { name: WEBHOOK_QUEUE },

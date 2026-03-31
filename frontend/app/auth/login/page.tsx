@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { AlertCircle } from 'lucide-react'
+import { setAccessToken } from '@/lib/auth'
 
 interface LoginForm { email: string; password: string }
 
@@ -22,6 +23,7 @@ export default function LoginPage() {
       const res = await fetch('/api/v1/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify(data),
       })
       if (!res.ok) {
@@ -29,9 +31,8 @@ export default function LoginPage() {
         setApiError(err.message || 'Login failed')
         return
       }
-      const { accessToken, refreshToken } = await res.json()
-      localStorage.setItem('accessToken', accessToken)
-      localStorage.setItem('refreshToken', refreshToken)
+      const { accessToken } = await res.json()
+      setAccessToken(accessToken)
       document.cookie = 'auth_present=true; path=/; max-age=2592000'
       router.push('/')
     } catch {

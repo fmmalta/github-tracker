@@ -65,6 +65,12 @@ export class PullRequest {
   @Column({ type: 'timestamp with time zone', nullable: true })
   first_review_at!: Date | null; // Populated during processing
 
+  // CI/pipeline status from GitHub Check Runs API
+  // Values: 'success', 'failure', 'neutral', 'cancelled', 'timed_out', 'action_required', 'stale', 'skipped', null
+  @Index()
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  check_conclusion!: string | null;
+
   // Foreign keys — store login for denormalized access
   @Column({ type: 'varchar', length: 255 })
   author_login!: string;

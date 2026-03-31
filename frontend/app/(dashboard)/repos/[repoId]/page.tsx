@@ -23,6 +23,7 @@ const FEATURED_REPO_METRICS = [
   'additions',
   'prs_failed_ci_total',
   'deploys',
+  'failed_deploys',
   'commits_total',
 ]
 
@@ -65,6 +66,27 @@ export default function RepoDetailPage() {
   const featuredMetrics: AggregatedMetric[] = (metricsData?.data ?? []).filter(
     (m) => FEATURED_REPO_METRICS.includes(m.metric_key)
   )
+  const normalizedFeaturedMetrics: AggregatedMetric[] = FEATURED_REPO_METRICS.map((metricKey) => {
+    const existing = featuredMetrics.find((m) => m.metric_key === metricKey)
+    if (existing) return existing
+
+    const defs = (metricsData?.definitions ?? []) as unknown
+    const fallbackDefinition = Array.isArray(defs)
+      ? defs.find((d: { key: string }) => d.key === metricKey)
+      : (defs as Record<string, unknown>)[metricKey]
+
+    return {
+      metric_key: metricKey as AggregatedMetric['metric_key'],
+      total: 0,
+      definition: (fallbackDefinition ?? {
+        key: metricKey,
+        name: metricKey,
+        formula: 'No data yet for selected period.',
+        unit: 'count',
+        disclaimer: 'Metric appears as zero until deployment data is ingested and aggregated.',
+      }) as AggregatedMetric['definition'],
+    }
+  })
 
   return (
     <>
@@ -78,7 +100,7 @@ export default function RepoDetailPage() {
           <MetricGridSkeleton count={4} />
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-            {featuredMetrics.map((metric) => (
+            {normalizedFeaturedMetrics.map((metric) => (
               <MetricCard
                 key={metric.metric_key}
                 label={metric.definition.name}

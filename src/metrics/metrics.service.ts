@@ -110,11 +110,18 @@ export class MetricsService {
     const targetKey = Object.values(MetricKey).includes(rawKey as MetricKey)
       ? rawKey as MetricKey
       : MetricKey.PRS_MERGED;
+    const isAverageMetric = new Set<MetricKey>([
+      MetricKey.AVG_TIME_TO_FIRST_REVIEW_HOURS,
+      MetricKey.AVG_TIME_TO_MERGE_HOURS,
+      MetricKey.AVG_PR_SIZE,
+    ]).has(targetKey);
+    const aggregationFn = isAverageMetric ? 'AVG' : 'SUM';
+    const sortDir = query.sort_dir === 'ASC' ? 'ASC' : 'DESC';
     const limit = query.limit ?? 50;
     const offset = query.offset ?? 0;
 
     const results: Array<{ developer_id: string; login: string; name: string | null; total: string }> = await this.dataSource.query(`
-      SELECT dm.developer_id, d.login, d.name, SUM(dm.metric_value) as total
+      SELECT dm.developer_id, d.login, d.name, ${aggregationFn}(dm.metric_value) as total
       FROM daily_metrics dm
       JOIN developers d ON d.id = dm.developer_id
       WHERE dm.org_id = $1
@@ -123,7 +130,7 @@ export class MetricsService {
         AND dm.developer_id IS NOT NULL
         ${query.repo_id ? 'AND dm.repo_id = $6' : ''}
       GROUP BY dm.developer_id, d.login, d.name
-      ORDER BY total ${query.sort_dir ?? 'DESC'}
+      ORDER BY total ${sortDir}
       LIMIT $5
     `, query.repo_id
       ? [orgId, query.start_date, query.end_date, targetKey, limit + offset, query.repo_id]
