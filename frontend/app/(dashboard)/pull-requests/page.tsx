@@ -98,13 +98,13 @@ export default function PullRequestsPage() {
                     <th className="text-left text-xs text-muted-foreground font-medium py-2 px-3">Developer</th>
                     <th className="text-left text-xs text-muted-foreground font-medium py-2 px-3 w-20">State</th>
                     <th
-                      className="text-left text-xs text-muted-foreground font-medium py-2 px-3 cursor-pointer hover:text-foreground w-24"
+                      className="text-left text-xs text-muted-foreground font-medium py-2 px-3 cursor-pointer hover:text-foreground min-w-[10rem]"
                       onClick={() => handleSort('github_created_at')}
                     >
                       Created <SortIndicator field="github_created_at" />
                     </th>
                     <th
-                      className="text-left text-xs text-muted-foreground font-medium py-2 px-3 cursor-pointer hover:text-foreground w-24"
+                      className="text-left text-xs text-muted-foreground font-medium py-2 px-3 cursor-pointer hover:text-foreground min-w-[10rem]"
                       onClick={() => handleSort('github_merged_at')}
                     >
                       Merged <SortIndicator field="github_merged_at" />
@@ -126,9 +126,19 @@ export default function PullRequestsPage() {
                 <tbody>
                   {rows.map((pr) => (
                     <tr key={pr.id} className="border-b border-border/50 hover:bg-white/[0.02]">
-                      <td className="py-2 px-3 text-xs text-primary">#{pr.number}</td>
+                      <td className="py-2 px-3 text-xs">
+                        {pr.html_url ? (
+                          <a href={pr.html_url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">#{pr.number}</a>
+                        ) : (
+                          <span className="text-primary">#{pr.number}</span>
+                        )}
+                      </td>
                       <td className="py-2 px-3 max-w-[200px]">
-                        <span className="text-xs text-foreground truncate block" title={pr.title}>{pr.title}</span>
+                        {pr.html_url ? (
+                          <a href={pr.html_url} target="_blank" rel="noopener noreferrer" className="text-xs text-foreground truncate block hover:text-primary transition-colors" title={pr.title}>{pr.title}</a>
+                        ) : (
+                          <span className="text-xs text-foreground truncate block" title={pr.title}>{pr.title}</span>
+                        )}
                       </td>
                       <td className="py-2 px-3 text-xs text-muted-foreground">
                         {reposData?.data.find((r) => r.id === pr.repository_id)?.name ?? pr.repository_id}
@@ -139,11 +149,11 @@ export default function PullRequestsPage() {
                           {pr.state}
                         </span>
                       </td>
-                      <td className="py-2 px-3 text-xs text-muted-foreground">
+                      <td className="py-2 px-3 text-xs text-muted-foreground whitespace-nowrap">
                         {pr.github_created_at ? formatDateTime(pr.github_created_at) : '—'}
                       </td>
-                      <td className="py-2 px-3 text-xs text-muted-foreground">
-                        {pr.github_merged_at ? new Date(pr.github_merged_at).toLocaleDateString() : '—'}
+                      <td className="py-2 px-3 text-xs text-muted-foreground whitespace-nowrap">
+                        {pr.github_merged_at ? formatDateTime(pr.github_merged_at) : '—'}
                       </td>
                       <td className="py-2 px-3 text-xs text-right text-green-400">
                         +{pr.additions?.toLocaleString() ?? 0}

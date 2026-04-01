@@ -212,25 +212,53 @@ export class MetricsService {
 
   private aggregateRows(rows: DailyMetric[]): AggregatedMetric[] {
     // For count metrics: SUM across the date range
-    // For average metrics: simple AVG across rows (each row is already a daily average)
+    // For average metrics: weighted average using prs_merged as weights
+    // This avoids the "average of averages" problem where days/repos with
+    // few PRs get equal weight to those with many PRs.
     const AVERAGE_KEYS = new Set([
       MetricKey.AVG_TIME_TO_FIRST_REVIEW_HOURS,
       MetricKey.AVG_TIME_TO_MERGE_HOURS,
       MetricKey.AVG_PR_SIZE,
     ]);
 
-    const accumulated = new Map<MetricKey, number[]>();
+    // Build a weight lookup: (date + repo_id) -> prs_merged count
+    // avg_pr_size and avg_time_to_merge_hours use prs_merged as the weight
+    // avg_time_to_first_review_hours also uses prs_merged (merged PRs that had reviews)
+    const weightKey = (row: DailyMetric) => `${row.metric_date}|${row.repo_id ?? ''}`;
+    const mergedWeights = new Map<string, number>();
     for (const row of rows) {
-      if (!accumulated.has(row.metric_key)) accumulated.set(row.metric_key, []);
-      accumulated.get(row.metric_key)!.push(Number(row.metric_value));
+      if (row.metric_key === MetricKey.PRS_MERGED) {
+        const k = weightKey(row);
+        mergedWeights.set(k, (mergedWeights.get(k) ?? 0) + Number(row.metric_value));
+      }
     }
 
-    return Array.from(accumulated.entries()).map(([key, values]) => ({
-      metric_key: key,
-      total: AVERAGE_KEYS.has(key)
-        ? values.reduce((a, b) => a + b, 0) / values.length
-        : values.reduce((a, b) => a + b, 0),
-      definition: METRIC_DEFINITIONS[key],
-    }));
+    const accumulated = new Map<MetricKey, number[]>();
+    const weights = new Map<MetricKey, number[]>();
+    for (const row of rows) {
+      if (!accumulated.has(row.metric_key)) {
+        accumulated.set(row.metric_key, []);
+        weights.set(row.metric_key, []);
+      }
+      accumulated.get(row.metric_key)!.push(Number(row.metric_value));
+      if (AVERAGE_KEYS.has(row.metric_key)) {
+        const w = mergedWeights.get(weightKey(row)) ?? 1;
+        weights.get(row.metric_key)!.push(w);
+      }
+    }
+
+    return Array.from(accumulated.entries()).map(([key, values]) => {
+      let total: number;
+      if (AVERAGE_KEYS.has(key)) {
+        const w = weights.get(key)!;
+        const totalWeight = w.reduce((a, b) => a + b, 0);
+        total = totalWeight > 0
+          ? values.reduce((sum, v, i) => sum + v * w[i], 0) / totalWeight
+          : values.reduce((a, b) => a + b, 0) / values.length;
+      } else {
+        total = values.reduce((a, b) => a + b, 0);
+      }
+      return { metric_key: key, total, definition: METRIC_DEFINITIONS[key] };
+    });
   }
 }

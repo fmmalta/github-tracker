@@ -7,8 +7,12 @@ import { WebhookDelivery } from '../entities/webhook-delivery.entity';
 import { PullRequest } from '../entities/pull-request.entity';
 import { Developer } from '../entities/developer.entity';
 import { Review } from '../entities/review.entity';
+import { Commit } from '../entities/commit.entity';
 import { Repository as RepoEntity } from '../entities/repository.entity';
 import { Deployment } from '../entities/deployment.entity';
+import { GitHubAppService } from '../services/github-app.service';
+import { RateLimitService } from '../services/rate-limit.service';
+import { Organization } from '../entities/organization.entity';
 import { WEBHOOK_QUEUE } from '../../queue/queue.service';
 
 interface GitHubPrPayload {
@@ -79,10 +83,16 @@ export class WebhookProcessor extends WorkerHost {
     private readonly developerRepo: TypeOrmRepo<Developer>,
     @InjectRepository(Review)
     private readonly reviewRepo: TypeOrmRepo<Review>,
+    @InjectRepository(Commit)
+    private readonly commitRepo: TypeOrmRepo<Commit>,
     @InjectRepository(RepoEntity)
     private readonly repoRepo: TypeOrmRepo<RepoEntity>,
     @InjectRepository(Deployment)
     private readonly deploymentRepo: TypeOrmRepo<Deployment>,
+    @InjectRepository(Organization)
+    private readonly orgRepo: TypeOrmRepo<Organization>,
+    private readonly githubAppService: GitHubAppService,
+    private readonly rateLimitService: RateLimitService,
   ) {
     super();
   }
@@ -221,6 +231,88 @@ export class WebhookProcessor extends WorkerHost {
       },
       { conflictPaths: ['github_id'] },
     );
+
+    // Fetch and persist commits for this PR
+    await this.fetchAndPersistCommits(repository, effectiveOrgId, pr.number);
+  }
+
+  private async fetchAndPersistCommits(
+    repository: RepoEntity,
+    orgId: string,
+    prNumber: number,
+  ): Promise<void> {
+    const org = await this.orgRepo.findOne({ where: { id: orgId } });
+    if (!org?.installation_id) return;
+
+    const prEntity = await this.prRepo.findOne({
+      where: { number: prNumber, repository_id: repository.id },
+    });
+    if (!prEntity) return;
+
+    try {
+      const octokit = await this.githubAppService.getOctokitForInstallation(
+        Number(org.installation_id),
+      );
+      const [owner, repoName] = repository.full_name.split('/');
+
+      let page = 1;
+      const maxPages = 10;
+
+      while (page <= maxPages) {
+        const commits = await this.rateLimitService.withRateLimitHandling(async () => {
+          const res = await octokit.rest.pulls.listCommits({
+            owner,
+            repo: repoName,
+            pull_number: prNumber,
+            per_page: 100,
+            page,
+          });
+          return { data: res.data, headers: res.headers as Record<string, string> };
+        });
+
+        for (const commit of commits) {
+          const authorLogin = commit.author?.login ?? commit.commit?.author?.name ?? null;
+          const authorGithubId = commit.author?.id ?? null;
+
+          let authorId: string | null = null;
+          if (authorGithubId) {
+            const dev = await this.developerRepo.findOne({ where: { github_id: authorGithubId } });
+            authorId = dev?.id ?? null;
+          }
+
+          await this.commitRepo.upsert(
+            {
+              sha: commit.sha,
+              message: commit.commit?.message?.substring(0, 2000) ?? null,
+              committed_at: new Date(
+                commit.commit?.author?.date ?? commit.commit?.committer?.date ?? Date.now(),
+              ),
+              additions: commit.stats?.additions ?? 0,
+              deletions: commit.stats?.deletions ?? 0,
+              author_login: authorLogin,
+              author_id: authorId,
+              pull_request_id: prEntity.id,
+              org_id: orgId,
+            },
+            { conflictPaths: ['sha'] },
+          );
+        }
+
+        if (commits.length < 100) break;
+        page++;
+      }
+    } catch (err) {
+      this.logger.warn(
+        JSON.stringify({
+          timestamp: new Date().toISOString(),
+          severity: 'WARN',
+          message: 'webhook_commit_fetch_failed',
+          pr_number: prNumber,
+          repo: repository.full_name,
+          error: (err as Error).message,
+        }),
+      );
+    }
   }
 
   private async processPullRequestReviewEvent(

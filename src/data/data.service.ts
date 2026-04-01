@@ -8,6 +8,8 @@ import { Organization } from '../github/entities/organization.entity';
 import { SyncJob } from '../github/entities/sync-job.entity';
 import { WebhookDelivery } from '../github/entities/webhook-delivery.entity';
 import { Review } from '../github/entities/review.entity';
+import { GitHubAppService } from '../github/services/github-app.service';
+import { RedisService } from '../redis/redis.service';
 import { RepoQueryDto } from './dto/repo-query.dto';
 import { DeveloperQueryDto } from './dto/developer-query.dto';
 import { PrQueryDto } from './dto/pr-query.dto';
@@ -50,6 +52,8 @@ export class DataService {
     private readonly webhookDeliveryRepo: TypeOrmRepository<WebhookDelivery>,
     @InjectRepository(Review)
     private readonly reviewRepo: TypeOrmRepository<Review>,
+    private readonly githubAppService: GitHubAppService,
+    private readonly redisService: RedisService,
   ) {}
 
   async getOrgs(userId?: string, userRole?: string): Promise<{ id: string; login: string; name: string | null }[]> {
@@ -157,11 +161,14 @@ export class DataService {
       .take(query.limit ?? 50)
       .getMany();
 
-    // Map to include repository_name for frontend
-    const mappedData = data.map(pr => ({
-      ...pr,
-      repository_name: pr.repository?.name ?? pr.repository_id,
-    }));
+    const mappedData = data.map(pr => {
+      const fullName = pr.repository?.full_name;
+      return {
+        ...pr,
+        repository_name: pr.repository?.name ?? pr.repository_id,
+        html_url: fullName ? `https://github.com/${fullName}/pull/${pr.number}` : null,
+      };
+    });
 
     return { data: mappedData, total, limit: query.limit ?? 50, offset: query.offset ?? 0 };
   }
@@ -233,5 +240,41 @@ export class DataService {
     });
 
     return { data, total };
+  }
+
+  async getReadme(orgId: string, repoId: string): Promise<{ content: string } | null> {
+    const repo = await this.repoRepo.findOne({ where: { id: repoId, org_id: orgId } });
+    if (!repo) return null;
+
+    const org = await this.orgRepo.findOne({ where: { id: orgId } });
+    if (!org?.installation_id) return null;
+
+    const cacheKey = `readme:${orgId}:${repoId}`;
+    const cached = await this.redisService.get(cacheKey);
+    if (cached) return JSON.parse(cached);
+
+    try {
+      const octokit = await this.githubAppService.getOctokitForInstallation(
+        Number(org.installation_id),
+      );
+
+      const [owner, repoName] = repo.full_name.split('/');
+      const res = await octokit.rest.repos.getReadme({
+        owner,
+        repo: repoName,
+        mediaType: { format: 'raw' },
+      });
+
+      const content = typeof res.data === 'string' ? res.data : String(res.data);
+      const result = { content };
+
+      await this.redisService.set(cacheKey, JSON.stringify(result), 3600);
+      return result;
+    } catch (err: unknown) {
+      const error = err as { status?: number; message?: string };
+      if (error.status === 404) return null;
+      this.logger.warn(`Failed to fetch README for ${repo.full_name}: ${error.message}`);
+      return null;
+    }
   }
 }

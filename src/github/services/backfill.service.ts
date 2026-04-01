@@ -8,6 +8,7 @@ import { Repository as RepoEntity } from '../entities/repository.entity';
 import { Developer } from '../entities/developer.entity';
 import { PullRequest } from '../entities/pull-request.entity';
 import { Review } from '../entities/review.entity';
+import { Commit } from '../entities/commit.entity';
 import { Deployment } from '../entities/deployment.entity';
 
 export interface BackfillProgress {
@@ -43,6 +44,7 @@ export class BackfillService {
   private readonly MAX_REVIEW_PAGES = 100; // Max 10000 reviews per PR (100 per page)
   private readonly MAX_DEPLOYMENT_PAGES = 20; // Max 2000 deployments per repo (100 per page)
   private readonly MAX_DEPLOYMENT_STATUS_PAGES = 20; // Max 2000 statuses per deployment
+  private readonly MAX_COMMIT_PAGES = 10; // Max 1000 commits per PR
 
   constructor(
     private readonly githubAppService: GitHubAppService,
@@ -57,6 +59,8 @@ export class BackfillService {
     private readonly prRepo: TypeOrmRepo<PullRequest>,
     @InjectRepository(Review)
     private readonly reviewRepo: TypeOrmRepo<Review>,
+    @InjectRepository(Commit)
+    private readonly commitRepo: TypeOrmRepo<Commit>,
     @InjectRepository(Deployment)
     private readonly deploymentRepo: TypeOrmRepo<Deployment>,
   ) {}
@@ -316,9 +320,9 @@ export class BackfillService {
         }
       }
 
-      // Fetch reviews for this page's PRs in parallel (3 at a time)
+      // Fetch reviews and commits for this page's PRs in parallel (3 at a time)
       this.logger.debug(JSON.stringify({
-        message: 'fetching_reviews_batch',
+        message: 'fetching_reviews_and_commits_batch',
         repo: `${owner}/${repo}`,
         pr_count: pendingReviewFetches.length,
       }));
@@ -329,14 +333,15 @@ export class BackfillService {
           const prReviews = await this.backfillReviews(octokit, owner, repo, item.prNumber, orgId, item.prEntityId);
           reviewsProcessed += prReviews;
 
+          await this.backfillCommits(octokit, owner, repo, item.prNumber, orgId, item.prEntityId);
+
           this.logger.debug(JSON.stringify({
-            message: 'reviews_saved',
+            message: 'reviews_and_commits_saved',
             repo: `${owner}/${repo}`,
             pr_number: item.prNumber,
             review_count: prReviews,
           }));
 
-          // Heartbeat after each PR's reviews are processed
           if (onRepoProgress && prReviews > 0) {
             await onRepoProgress(0, prReviews);
           }
@@ -534,6 +539,63 @@ export class BackfillService {
     }
 
     return reviews.length;
+  }
+
+  private async backfillCommits(
+    octokit: OctokitClient,
+    owner: string,
+    repo: string,
+    prNumber: number,
+    orgId: string,
+    pullRequestId: string,
+  ): Promise<number> {
+    const commits: any[] = [];
+    let page = 1;
+
+    while (page <= this.MAX_COMMIT_PAGES) {
+      const pageCommits = await this.rateLimitService.withRateLimitHandling(async () => {
+        const res = await octokit.rest.pulls.listCommits({
+          owner,
+          repo,
+          pull_number: prNumber,
+          per_page: 100,
+          page,
+        });
+        return { data: res.data, headers: res.headers as Record<string, string> };
+      });
+
+      commits.push(...pageCommits);
+      if (pageCommits.length < 100) break;
+      page++;
+    }
+
+    for (const commit of commits) {
+      const authorLogin = commit.author?.login ?? commit.commit?.author?.name ?? null;
+      const authorGithubId = commit.author?.id ?? null;
+
+      let authorId: string | null = null;
+      if (authorGithubId) {
+        const dev = await this.developerRepo.findOne({ where: { github_id: authorGithubId } });
+        authorId = dev?.id ?? null;
+      }
+
+      await this.commitRepo.upsert(
+        {
+          sha: commit.sha,
+          message: commit.commit?.message?.substring(0, 2000) ?? null,
+          committed_at: new Date(commit.commit?.author?.date ?? commit.commit?.committer?.date ?? Date.now()),
+          additions: commit.stats?.additions ?? 0,
+          deletions: commit.stats?.deletions ?? 0,
+          author_login: authorLogin,
+          author_id: authorId,
+          pull_request_id: pullRequestId,
+          org_id: orgId,
+        },
+        { conflictPaths: ['sha'] },
+      );
+    }
+
+    return commits.length;
   }
 
   private async fetchDeveloperName(octokit: OctokitClient, login: string): Promise<string | null> {

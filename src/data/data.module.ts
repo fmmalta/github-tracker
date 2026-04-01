@@ -10,11 +10,15 @@ import { Review } from '../github/entities/review.entity';
 import { DataController } from './data.controller';
 import { DataService } from './data.service';
 import { AuthModule } from '../auth/auth.module';
+import { GithubModule } from '../github/github.module';
+import { RedisModule } from '../redis/redis.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Repository, Developer, PullRequest, Organization, SyncJob, WebhookDelivery, Review]),
     AuthModule,
+    GithubModule,
+    RedisModule,
   ],
   controllers: [DataController],
   providers: [DataService],

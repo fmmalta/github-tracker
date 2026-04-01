@@ -100,6 +100,7 @@ export interface PullRequest {
   author_login: string
   repository_id: string
   repository_name?: string
+  html_url?: string | null
   base_branch: string
   additions: number
   deletions: number

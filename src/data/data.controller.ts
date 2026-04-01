@@ -64,6 +64,22 @@ export class DataController {
     return repo;
   }
 
+  @Get('orgs/:orgId/repos/:repoId/readme')
+  @ApiOperation({ summary: 'Get repository README content (cached 1h)' })
+  @ApiParam({ name: 'orgId', description: 'Organization ID' })
+  @ApiParam({ name: 'repoId', description: 'Repository ID' })
+  @ApiResponse({ status: 200, description: 'README markdown content' })
+  @ApiResponse({ status: 404, description: 'Repository or README not found' })
+  async getRepoReadme(
+    @Param('orgId') orgId: string,
+    @Param('repoId') repoId: string,
+    @CurrentUser() _user: AuthenticatedUser,
+  ) {
+    const result = await this.dataService.getReadme(orgId, repoId);
+    if (!result) throw new NotFoundException(`README not found for repo ${repoId}`);
+    return result;
+  }
+
   @Get('orgs/:orgId/developers')
   @ApiOperation({ summary: 'List developers active in organization' })
   @ApiParam({ name: 'orgId', description: 'Organization ID' })

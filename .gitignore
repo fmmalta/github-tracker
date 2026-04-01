@@ -11,3 +11,4 @@ frontend/.next/
 *.key
 credentials.json
 secrets.json
+.omc/*

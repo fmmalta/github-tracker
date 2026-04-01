@@ -2,6 +2,7 @@
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts'
+import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
 import { Header } from '@/components/dashboard/Header'
@@ -9,11 +10,13 @@ import { MetricCard } from '@/components/dashboard/MetricCard'
 import { TrendChart } from '@/components/dashboard/TrendChart'
 import { MetricGridSkeleton, ChartSkeleton } from '@/components/dashboard/LoadingSkeletons'
 import { FilterPanel } from '@/components/dashboard/FilterPanel'
+import { ReadmeSection } from '@/components/dashboard/ReadmeSection'
 import { useRepoMetrics } from '@/hooks/useRepoMetrics'
 import { useTrends } from '@/hooks/useTrends'
 import { useFilterParams } from '@/hooks/useFilterParams'
 import { apiGet } from '@/lib/api-client'
 import { useFirstOrgId } from '@/hooks/useOrgs'
+import { formatHoursToFriendly } from '@/lib/utils'
 import type { AggregatedMetric, PaginatedResponse, PullRequest } from '@/lib/types'
 
 const FEATURED_REPO_METRICS = [
@@ -92,6 +95,12 @@ export default function RepoDetailPage() {
     <>
       <Header title="Repository Detail" />
       <div>
+        <div className="mb-3">
+          <Link href="/repos" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+            &larr; Back to repositories
+          </Link>
+        </div>
+
         <FilterPanel />
 
         <h2 className="text-base font-semibold text-foreground mb-3">Repository Metrics</h2>
@@ -100,15 +109,21 @@ export default function RepoDetailPage() {
           <MetricGridSkeleton count={4} />
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-            {normalizedFeaturedMetrics.map((metric) => (
-              <MetricCard
-                key={metric.metric_key}
-                label={metric.definition.name}
-                value={metric.total}
-                unit={metric.definition.unit !== 'count' ? metric.definition.unit : undefined}
-                definition={metric.definition}
-              />
-            ))}
+            {normalizedFeaturedMetrics.map((metric) => {
+              const isAvgTimeToMerge = metric.metric_key === 'avg_time_to_merge_hours'
+              const displayValue = isAvgTimeToMerge ? formatHoursToFriendly(metric.total) : metric.total
+              const displayUnit = isAvgTimeToMerge ? undefined : (metric.definition.unit !== 'count' ? metric.definition.unit : undefined)
+
+              return (
+                <MetricCard
+                  key={metric.metric_key}
+                  label={metric.definition.name}
+                  value={displayValue}
+                  unit={displayUnit}
+                  definition={metric.definition}
+                />
+              )
+            })}
           </div>
         )}
 
@@ -145,6 +160,8 @@ export default function RepoDetailPage() {
             )}
           </div>
         </div>
+
+        <ReadmeSection orgId={orgId} repoId={repoId} />
       </div>
     </>
   )

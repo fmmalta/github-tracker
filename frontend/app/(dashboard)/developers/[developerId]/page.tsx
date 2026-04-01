@@ -139,19 +139,19 @@ export default function DeveloperDetailPage() {
                   <div className="border border-border rounded-lg p-3 bg-card/50">
                     <p className="text-xs text-muted-foreground mb-1">Total PRs Opened</p>
                     <p className="text-2xl font-semibold text-foreground">
-                      {metricsData?.data?.find(m => m.metric_key === 'prs_opened_total')?.total ?? 0}
+                      {metricsData?.data?.find(m => m.metric_key === 'prs_opened')?.total ?? 0}
                     </p>
                   </div>
                   <div className="border border-border rounded-lg p-3 bg-card/50">
                     <p className="text-xs text-muted-foreground mb-1">Total PRs Merged</p>
                     <p className="text-2xl font-semibold text-foreground">
-                      {metricsData?.data?.find(m => m.metric_key === 'prs_merged_total')?.total ?? 0}
+                      {metricsData?.data?.find(m => m.metric_key === 'prs_merged')?.total ?? 0}
                     </p>
                   </div>
                   <div className="border border-border rounded-lg p-3 bg-card/50">
                     <p className="text-xs text-muted-foreground mb-1">Code Reviews</p>
                     <p className="text-2xl font-semibold text-foreground">
-                      {metricsData?.data?.find(m => m.metric_key === 'reviews_submitted_total')?.total ?? 0}
+                      {metricsData?.data?.find(m => m.metric_key === 'reviews_submitted')?.total ?? 0}
                     </p>
                   </div>
                 </div>
@@ -174,7 +174,7 @@ export default function DeveloperDetailPage() {
                   <div className="border border-border rounded-lg p-3 bg-card/50">
                     <p className="text-xs text-muted-foreground mb-1">Avg PR Size</p>
                     <p className="text-2xl font-semibold text-foreground">
-                      {metricsData?.data?.find(m => m.metric_key === 'avg_pr_size')?.total?.toFixed(0) ?? 0} files
+                      {(metricsData?.data?.find(m => m.metric_key === 'avg_pr_size')?.total ?? 0).toLocaleString(undefined, { maximumFractionDigits: 0 })} lines
                     </p>
                   </div>
                 </div>
@@ -199,8 +199,8 @@ export default function DeveloperDetailPage() {
                         <th className="text-left text-xs text-muted-foreground font-medium py-2 px-3">Title</th>
                         <th className="text-left text-xs text-muted-foreground font-medium py-2 px-3">Repository</th>
                         <th className="text-left text-xs text-muted-foreground font-medium py-2 px-3 w-20">State</th>
-                        <th className="text-left text-xs text-muted-foreground font-medium py-2 px-3 w-24">Created</th>
-                        <th className="text-left text-xs text-muted-foreground font-medium py-2 px-3 w-24">Merged</th>
+                        <th className="text-left text-xs text-muted-foreground font-medium py-2 px-3 min-w-[10rem]">Created</th>
+                        <th className="text-left text-xs text-muted-foreground font-medium py-2 px-3 min-w-[10rem]">Merged</th>
                         <th className="text-right text-xs text-muted-foreground font-medium py-2 px-3 w-16">+Lines</th>
                         <th className="text-right text-xs text-muted-foreground font-medium py-2 px-3 w-16">-Lines</th>
                       </tr>
@@ -208,9 +208,19 @@ export default function DeveloperDetailPage() {
                     <tbody>
                       {(prData?.data ?? []).map((pr) => (
                         <tr key={pr.id} className="border-b border-border/50 hover:bg-white/[0.02]">
-                          <td className="py-2 px-3 text-xs text-primary">#{pr.number}</td>
+                          <td className="py-2 px-3 text-xs">
+                            {pr.html_url ? (
+                              <a href={pr.html_url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">#{pr.number}</a>
+                            ) : (
+                              <span className="text-primary">#{pr.number}</span>
+                            )}
+                          </td>
                           <td className="py-2 px-3 max-w-[200px]">
-                            <span className="text-xs text-foreground truncate block" title={pr.title}>{pr.title}</span>
+                            {pr.html_url ? (
+                              <a href={pr.html_url} target="_blank" rel="noopener noreferrer" className="text-xs text-foreground truncate block hover:text-primary transition-colors" title={pr.title}>{pr.title}</a>
+                            ) : (
+                              <span className="text-xs text-foreground truncate block" title={pr.title}>{pr.title}</span>
+                            )}
                           </td>
                           <td className="py-2 px-3 text-xs text-muted-foreground">{pr.repository_name || pr.repository_id}</td>
                           <td className="py-2 px-3">
