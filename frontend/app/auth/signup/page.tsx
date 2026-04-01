@@ -1,35 +1,56 @@
 'use client'
 import { useForm } from 'react-hook-form'
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useState, useRef, useCallback } from 'react'
+import Link from 'next/link'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { AlertCircle } from 'lucide-react'
-import Link from 'next/link'
 import { setAccessToken } from '@/lib/auth'
 
-interface LoginForm { email: string; password: string }
+interface SignupForm {
+  email: string
+  password: string
+  confirmPassword: string
+}
 
-export default function LoginPage() {
-  const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<LoginForm>()
+const MAX_ATTEMPTS = 5
+const WINDOW_MS = 60 * 60 * 1000
+
+export default function SignupPage() {
+  const { register, handleSubmit, watch, formState: { errors, isSubmitting } } = useForm<SignupForm>()
   const [apiError, setApiError] = useState<string | null>(null)
   const router = useRouter()
+  const attemptsRef = useRef<number[]>([])
 
-  const onSubmit = async (data: LoginForm) => {
+  const checkClientRateLimit = useCallback((): boolean => {
+    const now = Date.now()
+    attemptsRef.current = attemptsRef.current.filter(t => now - t < WINDOW_MS)
+    if (attemptsRef.current.length >= MAX_ATTEMPTS) {
+      setApiError('Too many attempts. Please wait before trying again.')
+      return false
+    }
+    attemptsRef.current.push(now)
+    return true
+  }, [])
+
+  const onSubmit = async (data: SignupForm) => {
     setApiError(null)
+    if (!checkClientRateLimit()) return
+
     try {
-      const res = await fetch('/api/v1/auth/login', {
+      const res = await fetch('/api/v1/auth/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify(data),
+        body: JSON.stringify({ email: data.email, password: data.password }),
       })
       if (!res.ok) {
         const err = await res.json()
-        setApiError(err.message || 'Login failed')
+        setApiError(err.message || 'Signup failed')
         return
       }
       const { accessToken } = await res.json()
@@ -41,6 +62,8 @@ export default function LoginPage() {
     }
   }
 
+  const password = watch('password')
+
   return (
     <Card className="w-full min-w-[380px] max-w-[440px] border-border bg-card">
       <CardHeader className="space-y-1 pb-4">
@@ -48,7 +71,7 @@ export default function LoginPage() {
           GitHub Analytics
         </CardTitle>
         <CardDescription className="text-muted-foreground text-sm">
-          Sign in to your workspace
+          Create your account
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -83,15 +106,35 @@ export default function LoginPage() {
               id="password"
               type="password"
               placeholder="••••••••"
-              autoComplete="current-password"
+              autoComplete="new-password"
               aria-invalid={!!errors.password}
               {...register('password', {
                 required: 'Password required',
                 minLength: { value: 8, message: 'Min 8 characters' },
+                maxLength: { value: 128, message: 'Max 128 characters' },
               })}
             />
             {errors.password && (
               <p className="text-xs text-destructive mt-1">{errors.password.message}</p>
+            )}
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="confirmPassword" className="text-sm text-foreground">
+              Confirm password
+            </Label>
+            <Input
+              id="confirmPassword"
+              type="password"
+              placeholder="••••••••"
+              autoComplete="new-password"
+              aria-invalid={!!errors.confirmPassword}
+              {...register('confirmPassword', {
+                required: 'Please confirm your password',
+                validate: value => value === password || 'Passwords do not match',
+              })}
+            />
+            {errors.confirmPassword && (
+              <p className="text-xs text-destructive mt-1">{errors.confirmPassword.message}</p>
             )}
           </div>
           <Button
@@ -99,13 +142,13 @@ export default function LoginPage() {
             disabled={isSubmitting}
             className="w-full mt-2"
           >
-            {isSubmitting ? 'Signing in...' : 'Sign in'}
+            {isSubmitting ? 'Creating account...' : 'Create account'}
           </Button>
         </form>
         <p className="mt-4 text-center text-sm text-muted-foreground">
-          Don&apos;t have an account?{' '}
-          <Link href="/auth/signup" className="text-primary hover:underline">
-            Create one
+          Already have an account?{' '}
+          <Link href="/auth/login" className="text-primary hover:underline">
+            Sign in
           </Link>
         </p>
       </CardContent>

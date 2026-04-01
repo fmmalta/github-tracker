@@ -1,6 +1,7 @@
 import type { NextConfig } from 'next'
 
 const isDev = process.env.NODE_ENV === 'development'
+const backendUrl = process.env.BACKEND_INTERNAL_URL ?? 'http://localhost:3000'
 
 const csp = [
   "default-src 'self'",
@@ -20,15 +21,14 @@ const csp = [
 ].join('; ')
 
 const nextConfig: NextConfig = {
-  // Backend API is on port 3000; frontend on 3001
   rewrites: async () => [
     {
       source: '/api/:path*',
-      destination: 'http://localhost:3000/api/:path*',
+      destination: `${backendUrl}/api/:path*`,
     },
     {
       source: '/github/:path*',
-      destination: 'http://localhost:3000/github/:path*',
+      destination: `${backendUrl}/github/:path*`,
     },
   ],
   headers: async () => [

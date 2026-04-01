@@ -28,6 +28,8 @@ export class AuthService {
   private readonly OTP_LOCK_SECONDS = 15 * 60;
   private readonly REFRESH_WINDOW_SECONDS = 5 * 60;
   private readonly REFRESH_MAX_ATTEMPTS_PER_IP = 60;
+  private readonly SIGNUP_WINDOW_SECONDS = 60 * 60;
+  private readonly SIGNUP_MAX_ATTEMPTS_PER_IP = 5;
 
   constructor(
     private readonly userRepository: UserRepository,
@@ -85,6 +87,15 @@ export class AuthService {
   }
 
   async signup(email: string, password: string, ipAddress?: string): Promise<{ accessToken: string; refreshToken: string }> {
+    if (ipAddress) {
+      await this.enforceRateLimit(
+        `auth:signup:ip:${ipAddress}`,
+        this.SIGNUP_WINDOW_SECONDS,
+        this.SIGNUP_MAX_ATTEMPTS_PER_IP,
+        'Too many signup attempts. Please try again later.',
+      );
+    }
+
     const existing = await this.userRepository.findByEmail(email);
     if (existing) throw new ConflictException('Email already registered');
 

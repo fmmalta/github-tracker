@@ -6,9 +6,9 @@ frontend/.next/
 .env.*
 !.env.example
 *.js.map
-.omc/*
 *.pem
 *.key
 credentials.json
 secrets.json
-.omc/*
+.planning/
+.omc/

@@ -13,6 +13,9 @@ RUN npm install
 # Copy source code
 COPY . .
 
+ARG BACKEND_INTERNAL_URL=http://localhost:3000
+ENV BACKEND_INTERNAL_URL=$BACKEND_INTERNAL_URL
+
 # Build Next.js app
 RUN npm run build
 
