@@ -1,7 +1,8 @@
 'use client'
 import { useState } from 'react'
 import { parseAsString, useQueryState } from 'nuqs'
-import { RefreshCw, Lock } from 'lucide-react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { RefreshCw, Lock, Plus, Check, Loader2 } from 'lucide-react'
 import { Header } from '@/components/dashboard/Header'
 import { SyncStatusBadge } from '@/components/common/SyncStatusBadge'
 import { SyncHistoryTable } from '@/components/admin/SyncHistoryTable'
@@ -9,6 +10,7 @@ import { WebhookDLQTable } from '@/components/admin/WebhookDLQTable'
 import { useHealth } from '@/hooks/useHealth'
 import { useAdminSync } from '@/hooks/useAdminSync'
 import { useAuth } from '@/hooks/useAuth'
+import { apiCall, apiGet, ApiError } from '@/lib/api-client'
 import type { HealthStatus } from '@/lib/types'
 
 const COOLDOWN_SECONDS = 3600
@@ -66,7 +68,7 @@ function OverviewTab({ health, isLoading }: { health: HealthStatus | undefined; 
     )
   }
 
-  if (!health) {
+  if (!health?.queue) {
     return (
       <p className="text-sm text-muted-foreground">Queue status unavailable. Data may be stale.</p>
     )
@@ -150,9 +152,129 @@ function ManualSyncTab({
   )
 }
 
-const TAB_SLUGS = ['overview', 'sync-history', 'webhooks', 'manual-sync'] as const
+interface DiscoveredOrg {
+  login: string
+  github_id: number
+  avatar_url: string
+  connected: boolean
+}
+
+function ConnectOrgTab() {
+  const queryClient = useQueryClient()
+
+  const { data, isLoading, isError, error } = useQuery<{ organizations: DiscoveredOrg[] }>({
+    queryKey: ['github-discover'],
+    queryFn: () => apiGet<{ organizations: DiscoveredOrg[] }>('/github/discover'),
+    staleTime: 30_000,
+  })
+
+  const connectMutation = useMutation<unknown, ApiError, string>({
+    mutationFn: async (orgLogin: string) => {
+      const res = await apiCall('/github/connect-pat', {
+        method: 'POST',
+        body: JSON.stringify({ orgLogin }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ message: res.statusText }))
+        throw new ApiError(res.status, err.message ?? 'Failed to connect')
+      }
+      return res.json()
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['github-discover'] })
+      queryClient.invalidateQueries({ queryKey: ['orgs'] })
+      queryClient.invalidateQueries({ queryKey: ['health'] })
+    },
+  })
+
+  const orgs = data?.organizations ?? []
+
+  return (
+    <div className="max-w-xl">
+      <div className="border border-border/40 rounded-lg bg-card p-5 mb-4">
+        <h3 className="text-base font-semibold text-foreground mb-1">Connect Organization</h3>
+        <p className="text-sm text-muted-foreground mb-4">
+          Select a GitHub organization to connect. This will start an initial data sync
+          (repos, PRs, reviews, deployments) from the last 90 days.
+        </p>
+
+        {isLoading && (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground py-4">
+            <Loader2 size={14} className="animate-spin" />
+            Discovering organizations from your GitHub token...
+          </div>
+        )}
+
+        {isError && (
+          <div className="border-l-2 border-red-500 bg-red-500/10 text-red-400 p-3 rounded mb-3 text-sm">
+            {(error as ApiError)?.message ?? 'Failed to discover organizations. Check your GITHUB_PAT.'}
+          </div>
+        )}
+
+        {connectMutation.isSuccess && (
+          <div className="border-l-2 border-green-500 bg-green-500/10 text-green-400 p-3 rounded mb-3 text-sm">
+            Organization connected. Initial sync has been queued — data will appear within a few minutes.
+          </div>
+        )}
+
+        {connectMutation.isError && (
+          <div className="border-l-2 border-red-500 bg-red-500/10 text-red-400 p-3 rounded mb-3 text-sm">
+            {connectMutation.error?.message ?? 'Failed to connect organization.'}
+          </div>
+        )}
+
+        {!isLoading && orgs.length === 0 && !isError && (
+          <p className="text-sm text-muted-foreground py-2">
+            No organizations found. Make sure your GitHub PAT has access to at least one organization.
+          </p>
+        )}
+
+        <div className="space-y-2">
+          {orgs.map((org) => (
+            <div
+              key={org.github_id}
+              className="flex items-center justify-between border border-border/40 rounded-lg p-3"
+            >
+              <div className="flex items-center gap-3">
+                <img
+                  src={org.avatar_url}
+                  alt={org.login}
+                  className="w-8 h-8 rounded-full"
+                />
+                <span className="text-sm font-medium text-foreground">{org.login}</span>
+              </div>
+              {org.connected ? (
+                <span className="flex items-center gap-1 text-xs text-green-400 font-medium">
+                  <Check size={12} />
+                  Connected
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => connectMutation.mutate(org.login)}
+                  disabled={connectMutation.isPending}
+                  className="flex items-center gap-1.5 bg-primary hover:bg-primary/90 text-white text-xs font-medium rounded px-3 py-1.5 disabled:opacity-50 transition-colors"
+                >
+                  {connectMutation.isPending ? (
+                    <Loader2 size={12} className="animate-spin" />
+                  ) : (
+                    <Plus size={12} />
+                  )}
+                  Connect
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+const TAB_SLUGS = ['connect', 'overview', 'sync-history', 'webhooks', 'manual-sync'] as const
 type TabSlug = (typeof TAB_SLUGS)[number]
 const TAB_LABELS: Record<TabSlug, string> = {
+  'connect': 'Connect Org',
   'overview': 'Overview',
   'sync-history': 'Sync History',
   'webhooks': 'Webhooks',
@@ -162,21 +284,21 @@ const TAB_LABELS: Record<TabSlug, string> = {
 export default function AdminPage() {
   const { isAdmin } = useAuth()
   const { data: health, isLoading: healthLoading } = useHealth()
-  const [tab, setTab] = useQueryState('tab', parseAsString.withDefault('overview'))
+  const [tab, setTab] = useQueryState('tab', parseAsString.withDefault('connect'))
 
-  if (!isAdmin) {
-    return (
-      <>
-        <Header title="Admin — Observability" />
-        <div className="mt-24 flex items-center justify-center gap-2">
-          <Lock size={16} className="text-red-400" />
-          <p className="text-sm text-red-400">
-            Admin access required. Contact your administrator to request access.
-          </p>
-        </div>
-      </>
-    )
-  }
+//   if (!isAdmin) {
+//     return (
+//       <>
+//         <Header title="Admin — Observability" />
+//         <div className="mt-24 flex items-center justify-center gap-2">
+//           <Lock size={16} className="text-red-400" />
+//           <p className="text-sm text-red-400">
+//             Admin access required. Contact your administrator to request access.
+//           </p>
+//         </div>
+//       </>
+//     )
+//   }
 
   const activeTab = TAB_SLUGS.includes((tab as TabSlug)) ? (tab as TabSlug) : 'overview'
 
@@ -205,6 +327,7 @@ export default function AdminPage() {
           ))}
         </div>
 
+        {activeTab === 'connect' && <ConnectOrgTab />}
         {activeTab === 'overview' && <OverviewTab health={health} isLoading={healthLoading} />}
         {activeTab === 'sync-history' && <SyncHistoryTable />}
         {activeTab === 'webhooks' && <WebhookDLQTable />}

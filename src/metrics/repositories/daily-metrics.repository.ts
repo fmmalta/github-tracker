@@ -13,6 +13,9 @@ export interface MetricRow {
   metricValue: number;
 }
 
+const NULL_UUID = '00000000-0000-0000-0000-000000000000';
+const NULL_BRANCH = '__null__';
+
 @Injectable()
 export class DailyMetricsRepository {
   constructor(
@@ -20,31 +23,34 @@ export class DailyMetricsRepository {
     private readonly repo: Repository<DailyMetric>,
   ) {}
 
-  // Upsert: write or update row when same unique key combination already exists
   async upsertMany(rows: MetricRow[]): Promise<void> {
     if (rows.length === 0) return;
 
-    // Build in chunks of 500 to avoid parameter overflow
     const CHUNK_SIZE = 500;
     for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
       const chunk = rows.slice(i, i + CHUNK_SIZE);
-      await this.repo
-        .createQueryBuilder()
-        .insert()
-        .into(DailyMetric)
-        .values(
-          chunk.map(r => ({
-            metric_date: r.metricDate,
-            org_id: r.orgId,
-            repo_id: r.repoId,
-            developer_id: r.developerId,
-            branch: r.branch,
-            metric_key: r.metricKey,
-            metric_value: r.metricValue,
-          })),
-        )
-        .orUpdate(['metric_value'], ['metric_date', 'org_id', 'repo_id', 'developer_id', 'metric_key', 'branch'])
-        .execute();
+      const params: any[] = [];
+      const valueRows = chunk.map(r => {
+        const base = params.length;
+        params.push(
+          r.metricDate,
+          r.orgId,
+          r.repoId ?? NULL_UUID,
+          r.developerId ?? NULL_UUID,
+          r.branch ?? NULL_BRANCH,
+          r.metricKey,
+          r.metricValue,
+        );
+        return `(DEFAULT, $${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, $${base + 7}, DEFAULT)`;
+      });
+
+      await this.repo.query(
+        `INSERT INTO "daily_metrics"("id", "metric_date", "org_id", "repo_id", "developer_id", "branch", "metric_key", "metric_value", "created_at")
+         VALUES ${valueRows.join(', ')}
+         ON CONFLICT ON CONSTRAINT "UQ_daily_metrics_logical_key"
+         DO UPDATE SET "metric_value" = EXCLUDED."metric_value"`,
+        params,
+      );
     }
   }
 

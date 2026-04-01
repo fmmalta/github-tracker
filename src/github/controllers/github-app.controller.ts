@@ -1,6 +1,7 @@
 import {
-  Controller, Post, Body, HttpCode, HttpStatus, Logger, BadRequestException,
+  Controller, Get, Post, Body, HttpCode, HttpStatus, Logger, BadRequestException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -24,6 +25,11 @@ class ConnectOrganizationDto {
   githubOrgId!: number;
 }
 
+class ConnectPatDto {
+  @IsString()
+  orgLogin!: string;
+}
+
 @Controller('github')
 export class GithubAppController {
   private readonly logger = new Logger(GithubAppController.name);
@@ -36,7 +42,99 @@ export class GithubAppController {
     @InjectRepository(SyncJob)
     private readonly syncJobRepo: TypeOrmRepo<SyncJob>,
     private readonly aggregationService: AggregationService,
+    private readonly configService: ConfigService,
   ) {}
+
+  @Get('discover')
+  @Roles('admin')
+  async discoverOrganizations(): Promise<object> {
+    const pat = this.configService.get<string>('GITHUB_PAT', '').trim();
+    if (!pat || pat === 'placeholder') {
+      throw new BadRequestException('GITHUB_PAT is not configured');
+    }
+
+    const { Octokit } = await import('@octokit/rest');
+    const octokit = new Octokit({ auth: pat, request: { timeout: 30_000 } });
+
+    const orgs: { login: string; id: number; avatar_url: string }[] = [];
+    let page = 1;
+    while (page <= 5) {
+      const res = await octokit.rest.orgs.listForAuthenticatedUser({ per_page: 100, page });
+      orgs.push(...res.data.map(o => ({ login: o.login, id: o.id, avatar_url: o.avatar_url })));
+      if (res.data.length < 100) break;
+      page++;
+    }
+
+    const connected = await this.orgRepo.find({ where: { is_active: true }, select: ['github_id'] });
+    const connectedIds = new Set(connected.map(o => Number(o.github_id)));
+
+    return {
+      organizations: orgs.map(o => ({
+        login: o.login,
+        github_id: o.id,
+        avatar_url: o.avatar_url,
+        connected: connectedIds.has(o.id),
+      })),
+    };
+  }
+
+  @Post('connect-pat')
+  @Roles('admin')
+  @HttpCode(HttpStatus.ACCEPTED)
+  async connectOrganizationViaPat(@Body() dto: ConnectPatDto): Promise<object> {
+    const pat = this.configService.get<string>('GITHUB_PAT', '').trim();
+    if (!pat || pat === 'placeholder') {
+      throw new BadRequestException('GITHUB_PAT is not configured');
+    }
+
+    const { Octokit } = await import('@octokit/rest');
+    const octokit = new Octokit({ auth: pat, request: { timeout: 30_000 } });
+
+    const { data: orgData } = await octokit.rest.orgs.get({ org: dto.orgLogin });
+
+    await this.orgRepo.upsert(
+      {
+        github_id: orgData.id,
+        login: orgData.login,
+        name: orgData.name ?? orgData.login,
+        installation_id: '0',
+        is_active: true,
+      },
+      { conflictPaths: ['github_id'] },
+    );
+
+    const org = await this.orgRepo.findOne({ where: { github_id: orgData.id } });
+    if (!org) throw new Error(`Failed to create/find org ${dto.orgLogin}`);
+
+    const syncJob = this.syncJobRepo.create({
+      type: 'initial_backfill',
+      status: 'pending',
+      org_login: org.login,
+      org_id: org.id,
+    });
+    await this.syncJobRepo.save(syncJob);
+
+    await this.backfillQueue.add(BACKFILL_JOB, {
+      installationId: 0,
+      orgLogin: org.login,
+      orgId: org.id,
+      syncJobId: syncJob.id,
+    });
+
+    this.logger.log(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      severity: 'INFO',
+      message: 'org_connected_via_pat',
+      org_login: org.login,
+      sync_job_id: syncJob.id,
+    }));
+
+    return {
+      status: 'backfill_queued',
+      orgLogin: org.login,
+      syncJobId: syncJob.id,
+    };
+  }
 
   @Post('connect')
   @Roles('admin')

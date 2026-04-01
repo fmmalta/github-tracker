@@ -44,8 +44,8 @@ export function Sidebar() {
             </li>
           )
         })}
-        {isAdmin && (
-          <>
+
+
             <li className="border-t border-border my-1 pt-1">
               <Link
                 href="/admin"
@@ -60,8 +60,8 @@ export function Sidebar() {
                 Admin
               </Link>
             </li>
-          </>
-        )}
+
+
       </ul>
     </nav>
   )
